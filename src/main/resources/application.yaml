@@ -1,0 +1,8 @@
+ficc:
+  run:
+    default-app-id: 1
+    default-region: NAMR
+  database:
+    url: jdbc:mysql://localhost:3306/ficc_surveillance
+    user: root
+    password: root
