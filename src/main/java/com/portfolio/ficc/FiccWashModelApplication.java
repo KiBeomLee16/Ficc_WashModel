@@ -22,6 +22,6 @@ public class FiccWashModelApplication implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        runRequestWorker.run(args);
+        runRequestWorker.run();
     }
 }

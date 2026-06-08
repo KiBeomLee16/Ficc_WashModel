@@ -8,8 +8,7 @@ public record RunRequest(
         int appId,
         String region,
         LocalDate businessDate,
-        String status,
-        int attemptCount
+        String status
 ) {
 
     public RunRequest {
@@ -22,9 +21,6 @@ public record RunRequest(
         region = requireText(region, "region").toUpperCase();
         Objects.requireNonNull(businessDate, "businessDate is required");
         status = requireText(status, "status").toUpperCase();
-        if (attemptCount < 0) {
-            throw new IllegalArgumentException("attemptCount cannot be negative");
-        }
     }
 
     private static String requireText(String value, String fieldName) {

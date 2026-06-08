@@ -4,6 +4,9 @@ USE ficc_surveillance;
 DROP PROCEDURE IF EXISTS sp_get_surveillance_model_config;
 DROP PROCEDURE IF EXISTS sp_get_surveillance_model_threshold;
 DROP PROCEDURE IF EXISTS sp_get_ficc_trades;
+DROP PROCEDURE IF EXISTS sp_claim_next_surveillance_run_request;
+DROP PROCEDURE IF EXISTS sp_mark_surveillance_run_request_completed;
+DROP PROCEDURE IF EXISTS sp_mark_surveillance_run_request_failed;
 DROP TABLE IF EXISTS ficc_wash_alert_history_trade;
 DROP TABLE IF EXISTS ficc_wash_alert_history;
 DROP TABLE IF EXISTS surveillance_run_request;
@@ -16,8 +19,10 @@ CREATE TABLE surveillance_model_master (
     appid INT PRIMARY KEY,
     region VARCHAR(10) NOT NULL,
     name VARCHAR(120) NOT NULL,
+    model_code VARCHAR(80) NOT NULL,
+    model_name VARCHAR(120) NOT NULL,
+    model_class_name VARCHAR(255) NOT NULL,
     description VARCHAR(500),
-    owner_team VARCHAR(120),
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_surveillance_model_master_app_region (appid, region),
@@ -28,11 +33,6 @@ CREATE TABLE surveillance_model_config (
     appid INT NOT NULL,
     modelid INT NOT NULL,
     region VARCHAR(10) NOT NULL,
-    model_code VARCHAR(80) NOT NULL,
-    model_name VARCHAR(120) NOT NULL,
-    model_class_name VARCHAR(255) NOT NULL,
-    run_mode VARCHAR(30) NOT NULL DEFAULT 'BATCH',
-    source_system VARCHAR(80) NOT NULL DEFAULT 'MYSQL_SP',
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (appid, modelid, region),
@@ -47,17 +47,10 @@ CREATE TABLE surveillance_run_request (
     business_date DATE NOT NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
     requested_by VARCHAR(80) NOT NULL DEFAULT 'LOCAL_USER',
-    request_source VARCHAR(50) NOT NULL DEFAULT 'MYSQL_SEED',
     requested_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     started_at TIMESTAMP NULL,
     completed_at TIMESTAMP NULL,
-    trades_processed INT NOT NULL DEFAULT 0,
     alerts_generated INT NOT NULL DEFAULT 0,
-    alerts_dispatched INT NOT NULL DEFAULT 0,
-    duplicate_alerts INT NOT NULL DEFAULT 0,
-    attempt_count INT NOT NULL DEFAULT 0,
-    locked_by VARCHAR(120),
-    locked_at TIMESTAMP NULL,
     error_message VARCHAR(2000),
     INDEX idx_surveillance_run_request_queue (status, requested_at, request_id),
     INDEX idx_surveillance_run_request_business_date (region, business_date),
@@ -140,41 +133,37 @@ INSERT INTO surveillance_model_master (
     appid,
     region,
     name,
+    model_code,
+    model_name,
+    model_class_name,
     description,
-    owner_team,
     enabled
 ) VALUES
-(1, 'NAMR', 'NAMR FICC Surveillance App', 'North America FICC surveillance metadata.', 'Financial Crime Surveillance', TRUE),
-(2, 'EMEA', 'EMEA FICC Surveillance App', 'Europe, Middle East, and Africa FICC surveillance metadata.', 'Financial Crime Surveillance', TRUE),
-(3, 'APAC', 'APAC FICC Surveillance App', 'Asia Pacific FICC surveillance metadata.', 'Financial Crime Surveillance', TRUE);
+(1, 'NAMR', 'NAMR FICC Surveillance App', 'FICC_WASH_TRADE', 'FICC Wash Trade Surveillance Model', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'North America FICC surveillance metadata.', TRUE),
+(2, 'EMEA', 'EMEA FICC Surveillance App', 'FICC_WASH_TRADE', 'FICC Wash Trade Surveillance Model', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Europe, Middle East, and Africa FICC surveillance metadata.', TRUE),
+(3, 'APAC', 'APAC FICC Surveillance App', 'FICC_WASH_TRADE', 'FICC Wash Trade Surveillance Model', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Asia Pacific FICC surveillance metadata.', TRUE);
 
 INSERT INTO surveillance_model_config (
     appid,
     modelid,
     region,
-    model_code,
-    model_name,
-    model_class_name,
-    run_mode,
-    source_system,
     enabled
 ) VALUES
-(1, 1, 'NAMR', 'FICC_WASH_TRADE', 'FICC Wash Trade Surveillance Model', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'BATCH', 'MYSQL_SP', TRUE),
-(2, 1, 'EMEA', 'FICC_WASH_TRADE', 'FICC Wash Trade Surveillance Model', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'BATCH', 'MYSQL_SP', TRUE),
-(3, 1, 'APAC', 'FICC_WASH_TRADE', 'FICC Wash Trade Surveillance Model', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'BATCH', 'MYSQL_SP', TRUE);
+(1, 1, 'NAMR', TRUE),
+(2, 1, 'EMEA', TRUE),
+(3, 1, 'APAC', TRUE);
 
 INSERT INTO surveillance_run_request (
     appid,
     region,
     business_date,
-    requested_by,
-    request_source
+    requested_by
 ) VALUES
-(1, 'NAMR', '2026-06-04', 'portfolio-seed', 'MYSQL_SEED'),
-(1, 'NAMR', '2026-06-05', 'portfolio-seed', 'MYSQL_SEED'),
-(1, 'NAMR', '2026-06-06', 'portfolio-seed', 'MYSQL_SEED'),
-(1, 'NAMR', '2026-06-07', 'portfolio-seed', 'MYSQL_SEED'),
-(1, 'NAMR', '2026-06-08', 'portfolio-seed', 'MYSQL_SEED');
+(1, 'NAMR', '2026-06-04', 'portfolio-seed'),
+(1, 'NAMR', '2026-06-05', 'portfolio-seed'),
+(1, 'NAMR', '2026-06-06', 'portfolio-seed'),
+(1, 'NAMR', '2026-06-07', 'portfolio-seed'),
+(1, 'NAMR', '2026-06-08', 'portfolio-seed');
 
 INSERT INTO surveillance_model_threshold (
     appid,
@@ -302,9 +291,9 @@ BEGIN
         config.modelid,
         config.region,
         master.name AS app_name,
-        config.model_code,
-        config.model_name,
-        config.model_class_name
+        master.model_code,
+        master.model_name,
+        master.model_class_name
     FROM surveillance_model_config config
     JOIN surveillance_model_master master
       ON config.appid = master.appid
@@ -313,6 +302,69 @@ BEGIN
       AND config.region = UPPER(p_region)
       AND config.enabled = TRUE
       AND master.enabled = TRUE;
+END//
+
+CREATE PROCEDURE sp_claim_next_surveillance_run_request()
+BEGIN
+    DECLARE v_request_id BIGINT DEFAULT NULL;
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_request_id = NULL;
+
+    SELECT request_id
+    INTO v_request_id
+    FROM surveillance_run_request
+    WHERE status IN ('PENDING', 'FAILED')
+    ORDER BY
+        CASE status
+            WHEN 'PENDING' THEN 0
+            ELSE 1
+        END,
+        requested_at,
+        request_id
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED;
+
+    IF v_request_id IS NOT NULL THEN
+        UPDATE surveillance_run_request
+        SET status = 'RUNNING',
+            started_at = CURRENT_TIMESTAMP,
+            completed_at = NULL,
+            error_message = NULL
+        WHERE request_id = v_request_id;
+    END IF;
+
+    SELECT
+        request_id,
+        appid,
+        region,
+        business_date,
+        status
+    FROM surveillance_run_request
+    WHERE request_id = v_request_id;
+END//
+
+CREATE PROCEDURE sp_mark_surveillance_run_request_completed(
+    IN p_request_id BIGINT,
+    IN p_alerts_generated INT
+)
+BEGIN
+    UPDATE surveillance_run_request
+    SET status = 'COMPLETED',
+        completed_at = CURRENT_TIMESTAMP,
+        alerts_generated = p_alerts_generated,
+        error_message = NULL
+    WHERE request_id = p_request_id;
+END//
+
+CREATE PROCEDURE sp_mark_surveillance_run_request_failed(
+    IN p_request_id BIGINT,
+    IN p_error_message VARCHAR(2000)
+)
+BEGIN
+    UPDATE surveillance_run_request
+    SET status = 'FAILED',
+        completed_at = CURRENT_TIMESTAMP,
+        error_message = p_error_message
+    WHERE request_id = p_request_id;
 END//
 
 CREATE PROCEDURE sp_get_surveillance_model_threshold(

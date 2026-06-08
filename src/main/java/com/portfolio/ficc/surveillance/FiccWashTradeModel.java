@@ -85,9 +85,7 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
 
     @Override
     public List<Alert> evaluate(ModelConfig modelConfig, List<Trade> trades, LocalDate businessDate) {
-        Objects.requireNonNull(modelConfig, "modelConfig is required");
-        Objects.requireNonNull(trades, "trades is required");
-        Objects.requireNonNull(businessDate, "businessDate is required");
+     
 
         if (trades.isEmpty()) {
             return List.of();

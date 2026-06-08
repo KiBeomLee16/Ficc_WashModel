@@ -1,6 +1,5 @@
 package com.portfolio.ficc.surveillance;
 
-import com.portfolio.ficc.io.AlertDispatcher;
 import com.portfolio.ficc.io.DatabaseConfig;
 import com.portfolio.ficc.model.Alert;
 import com.portfolio.ficc.model.ModelConfig;
@@ -17,6 +16,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static com.portfolio.ficc.TestConfigs.alertDispatcher;
 
 class FiccWashTradeModelTest {
 
@@ -134,7 +134,7 @@ class FiccWashTradeModelTest {
 
         TestableFiccWashTradeModel(Map<String, BigDecimal> thresholdsByName) {
             super(new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""),
-                    new AlertDispatcher());
+                    alertDispatcher());
             this.thresholdsByName = thresholdsByName;
         }
 

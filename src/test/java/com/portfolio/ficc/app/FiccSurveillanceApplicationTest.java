@@ -1,7 +1,6 @@
 package com.portfolio.ficc.app;
 
 import com.portfolio.ficc.io.DatabaseConfig;
-import com.portfolio.ficc.io.AlertHistoryRepository;
 import com.portfolio.ficc.model.Alert;
 import com.portfolio.ficc.model.ModelConfig;
 import com.portfolio.ficc.model.RunSummary;
@@ -30,9 +29,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static com.portfolio.ficc.TestConfigs.RUN_CONFIG;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -53,9 +50,6 @@ class FiccSurveillanceApplicationTest {
 
     @Mock
     private SurveillanceModelRegistry modelRegistry;
-
-    @Mock
-    private AlertHistoryRepository alertHistoryRepository;
 
     @Test
     void runExecutesSelectedModelPipelineInSeparateSteps() {
@@ -86,15 +80,15 @@ class FiccSurveillanceApplicationTest {
         when(model.getTrades(modelConfig, "emea", businessDate)).thenReturn(trades);
         when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of(alert));
         when(model.generateJson(alert)).thenReturn(alertPayload);
-        when(alertHistoryRepository.saveIfNew(modelConfig, businessDate, alert, alertPayload)).thenReturn(true);
+        when(model.dispatchAlert(modelConfig, businessDate, alert, alertPayload)).thenReturn(true);
 
-        PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry, alertHistoryRepository);
+        PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
 
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;
         try {
             System.setOut(new PrintStream(output, true, StandardCharsets.UTF_8));
-            RunSummary summary = application.run(new String[]{"2", "emea", "2026-06-08"});
+            RunSummary summary = application.run(2, "emea", businessDate);
             assertEquals(2, summary.tradesProcessed());
             assertEquals(1, summary.alertsGenerated());
             assertEquals(1, summary.alertsDispatched());
@@ -106,14 +100,13 @@ class FiccSurveillanceApplicationTest {
         assertEquals(2, application.requestedAppId);
         assertEquals("emea", application.requestedRegion);
 
-        InOrder order = inOrder(modelRegistry, model, alertHistoryRepository);
+        InOrder order = inOrder(modelRegistry, model);
         order.verify(modelRegistry).getModel(modelConfig.modelClassName());
         order.verify(model).modelCode();
         order.verify(model).getTrades(modelConfig, "emea", businessDate);
         order.verify(model).evaluate(modelConfig, trades, businessDate);
         order.verify(model).generateJson(alert);
-        order.verify(alertHistoryRepository).saveIfNew(modelConfig, businessDate, alert, alertPayload);
-        order.verify(model).dispatchAlert(alertPayload);
+        order.verify(model).dispatchAlert(modelConfig, businessDate, alert, alertPayload);
     }
 
     @Test
@@ -145,16 +138,15 @@ class FiccSurveillanceApplicationTest {
         when(model.getTrades(modelConfig, "NAMR", businessDate)).thenReturn(trades);
         when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of(alert));
         when(model.generateJson(alert)).thenReturn(alertPayload);
-        when(alertHistoryRepository.saveIfNew(modelConfig, businessDate, alert, alertPayload)).thenReturn(false);
+        when(model.dispatchAlert(modelConfig, businessDate, alert, alertPayload)).thenReturn(false);
 
-        PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry, alertHistoryRepository);
+        PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
 
-        RunSummary summary = application.run(new String[]{"1", "NAMR", "2026-06-08"});
+        RunSummary summary = application.run(1, "NAMR", businessDate);
 
         assertEquals(0, summary.alertsDispatched());
         assertEquals(1, summary.duplicateAlerts());
-        verify(alertHistoryRepository).saveIfNew(modelConfig, businessDate, alert, alertPayload);
-        verify(model, never()).dispatchAlert(alertPayload);
+        verify(model).dispatchAlert(modelConfig, businessDate, alert, alertPayload);
     }
 
     @Test
@@ -163,11 +155,11 @@ class FiccSurveillanceApplicationTest {
         when(modelRegistry.getModel(modelConfig.modelClassName())).thenReturn(model);
         when(model.modelCode()).thenReturn("FICC_WASH_TRADE");
 
-        PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry, alertHistoryRepository);
+        PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> application.run(new String[]{"1", "NAMR", "2026-06-08"})
+                () -> application.run(1, "NAMR", LocalDate.of(2026, 6, 8))
         );
 
         assertEquals("Configured modelCode=UNEXPECTED_MODEL does not match registered modelCode=FICC_WASH_TRADE "
@@ -263,13 +255,10 @@ class FiccSurveillanceApplicationTest {
 
         PipelineApplication(
                 ModelConfig modelConfig,
-                SurveillanceModelRegistry modelRegistry,
-                AlertHistoryRepository alertHistoryRepository
+                SurveillanceModelRegistry modelRegistry
         ) {
             super(new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""),
-                    modelRegistry,
-                    alertHistoryRepository,
-                    RUN_CONFIG);
+                    modelRegistry);
             this.modelConfig = modelConfig;
         }
 
@@ -287,9 +276,7 @@ class FiccSurveillanceApplicationTest {
 
         ConnectionBackedApplication(Connection connection) {
             super(new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""),
-                    new SurveillanceModelRegistry(List.of()),
-                    new AlertHistoryRepository(new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", "")),
-                    RUN_CONFIG);
+                    new SurveillanceModelRegistry(List.of()));
             this.connection = connection;
         }
 

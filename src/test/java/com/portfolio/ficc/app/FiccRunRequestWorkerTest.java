@@ -11,9 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDate;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,80 +26,65 @@ class FiccRunRequestWorkerTest {
     private RunRequestRepository runRequestRepository;
 
     @Test
-    void noArgsClaimsNextPendingRequestAndMarksCompleted() {
-        RunRequest request = runRequest();
-        RunSummary summary = runSummary();
-        when(runRequestRepository.claimNextPendingRequest(anyString())).thenReturn(Optional.of(request));
+    void runClaimsRunnableRequestsIntoQueueAndMarksCompleted() {
+        RunRequest firstRequest = runRequest(10, "NAMR", LocalDate.of(2026, 6, 8));
+        RunRequest secondRequest = runRequest(11, "NAMR", LocalDate.of(2026, 6, 8));
+        RunSummary summary = runSummary("NAMR", LocalDate.of(2026, 6, 8));
+        when(runRequestRepository.claimNextRunnableRequest())
+                .thenReturn(Optional.of(firstRequest))
+                .thenReturn(Optional.of(secondRequest))
+                .thenReturn(Optional.empty());
         when(surveillanceApplication.run(1, "NAMR", LocalDate.of(2026, 6, 8))).thenReturn(summary);
 
         FiccRunRequestWorker worker = new FiccRunRequestWorker(surveillanceApplication, runRequestRepository);
 
-        worker.run(new String[0]);
+        worker.run();
 
-        verify(runRequestRepository).claimNextPendingRequest(anyString());
-        verify(surveillanceApplication).run(1, "NAMR", LocalDate.of(2026, 6, 8));
-        verify(runRequestRepository).markCompleted(request, summary);
+        verify(runRequestRepository, times(3)).claimNextRunnableRequest();
+        verify(surveillanceApplication, times(2)).run(1, "NAMR", LocalDate.of(2026, 6, 8));
+        verify(runRequestRepository).markCompleted(firstRequest, summary);
+        verify(runRequestRepository).markCompleted(secondRequest, summary);
     }
 
     @Test
-    void requestIdArgumentClaimsSpecificPendingRequest() {
-        RunRequest request = runRequest();
-        RunSummary summary = runSummary();
-        when(runRequestRepository.claimRequestById(10L, "test-worker")).thenReturn(Optional.of(request));
-        when(surveillanceApplication.run(1, "NAMR", LocalDate.of(2026, 6, 8))).thenReturn(summary);
-
-        FiccRunRequestWorker worker = new TestWorker(surveillanceApplication, runRequestRepository);
-
-        worker.run(new String[]{"--request-id=10"});
-
-        verify(runRequestRepository).claimRequestById(10L, "test-worker");
-        verify(runRequestRepository).markCompleted(request, summary);
-    }
-
-    @Test
-    void positionalArgsUseDirectRunMode() {
-        String[] args = {"1", "NAMR", "2026-06-08"};
-        FiccRunRequestWorker worker = new FiccRunRequestWorker(surveillanceApplication, runRequestRepository);
-
-        worker.run(args);
-
-        verify(surveillanceApplication).run(args);
-        verify(runRequestRepository, never()).claimNextPendingRequest(anyString());
-    }
-
-    @Test
-    void failedRequestIsMarkedFailedAndRethrown() {
-        RunRequest request = runRequest();
+    void failedRequestIsMarkedFailedAndNextPendingRequestContinues() {
+        RunRequest failedRequest = runRequest(10, "NAMR", LocalDate.of(2026, 6, 8));
+        RunRequest nextRequest = runRequest(11, "EMEA", LocalDate.of(2026, 6, 9));
         IllegalStateException failure = new IllegalStateException("database down");
-        when(runRequestRepository.claimNextPendingRequest(anyString())).thenReturn(Optional.of(request));
+        RunSummary summary = runSummary("EMEA", LocalDate.of(2026, 6, 9));
+        when(runRequestRepository.claimNextRunnableRequest())
+                .thenReturn(Optional.of(failedRequest))
+                .thenReturn(Optional.of(nextRequest))
+                .thenReturn(Optional.empty());
         when(surveillanceApplication.run(1, "NAMR", LocalDate.of(2026, 6, 8))).thenThrow(failure);
+        when(surveillanceApplication.run(1, "EMEA", LocalDate.of(2026, 6, 9))).thenReturn(summary);
 
         FiccRunRequestWorker worker = new FiccRunRequestWorker(surveillanceApplication, runRequestRepository);
 
-        assertThrows(IllegalStateException.class, () -> worker.run(new String[]{"--queue"}));
+        worker.run();
 
-        verify(runRequestRepository).markFailed(request, failure);
-        verify(runRequestRepository, never()).markCompleted(request, runSummary());
+        verify(runRequestRepository).markFailed(failedRequest, failure);
+        verify(runRequestRepository, never()).markCompleted(failedRequest, summary);
+        verify(runRequestRepository).markCompleted(nextRequest, summary);
     }
 
-    private static RunRequest runRequest() {
+    private static RunRequest runRequest(long requestId, String region, LocalDate businessDate) {
         return new RunRequest(
-                10,
+                requestId,
                 1,
-                "NAMR",
-                LocalDate.of(2026, 6, 8),
-                "RUNNING",
-                1
+                region,
+                businessDate,
+                "RUNNING"
         );
     }
 
-    private static RunSummary runSummary() {
+    private static RunSummary runSummary(String region, LocalDate businessDate) {
         return new RunSummary(
                 1,
                 1,
                 "FICC_WASH_TRADE",
-                "NAMR",
-                LocalDate.of(2026, 6, 8),
+                region,
+                businessDate,
                 40,
                 2,
                 2,
@@ -108,15 +92,4 @@ class FiccRunRequestWorkerTest {
         );
     }
 
-    private static class TestWorker extends FiccRunRequestWorker {
-
-        TestWorker(FiccSurveillanceApplication surveillanceApplication, RunRequestRepository runRequestRepository) {
-            super(surveillanceApplication, runRequestRepository);
-        }
-
-        @Override
-        String workerId() {
-            return "test-worker";
-        }
-    }
 }

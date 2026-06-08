@@ -31,7 +31,7 @@ com.portfolio.ficc.surveillance.AbstractSurveillanceModel
 com.portfolio.ficc.surveillance.FiccWashTradeModel
 ```
 
-The database stores `model_class_name`, and Java resolves it through `SurveillanceModelRegistry`. This keeps model selection database-driven while still restricting execution to registered, whitelisted model classes.
+The database stores `model_class_name`, and Java resolves it through `SurveillanceModelRegistry`. Model class metadata lives in `surveillance_model_master`, while `surveillance_model_config` provides the model ID mapping used by thresholds and alert history. This keeps model selection database-driven while still restricting execution to registered, whitelisted model classes.
 
 Runtime flow:
 
@@ -39,18 +39,18 @@ Runtime flow:
 queued input: surveillance_run_request row
   -> Spring Boot main
   -> CommandLineRunner delegates to FiccRunRequestWorker
-  -> claim oldest PENDING request and mark RUNNING
+  -> claim PENDING and FAILED requests through sp_claim_next_surveillance_run_request
   -> FiccSurveillanceApplication.getSpecificModel(appid, region) calls sp_get_surveillance_model_config
-  -> read model_class_name from config
+  -> read model_class_name from master/config result
   -> find model in SurveillanceModelRegistry
   -> model.getTrades(modelConfig, region, businessDate)
   -> sp_get_ficc_trades joins threshold lookup_days and loads the lookup window
   -> model.evaluate(modelConfig, trades, businessDate)
   -> lookup runtime thresholds by stored procedure
   -> model.generateJson(alert)
+  -> model.dispatchAlert(modelConfig, businessDate, alert, alertPayload)
   -> save alert history and drill-out trades if fingerprint is new
-  -> model.dispatchAlert(alertPayload) for new alerts only
-  -> mark request COMPLETED with run counts, or FAILED with error_message
+  -> mark request COMPLETED with generated alert count, or FAILED with error_message
 ```
 
 ## Five-Method Pipeline
@@ -70,16 +70,16 @@ queued input: surveillance_run_request row
 4. `AbstractSurveillanceModel.generateJson(Alert alert)`
    Converts the alert to a JSON payload with `alertId`, `alertType`, `matchType`, `tradeA`, `tradeB`, `relatedTrades`, aggregate quantities, aggregate amounts, threshold amount, reasons, and `createdAt`.
 
-5. `AbstractSurveillanceModel.dispatchAlert(String alertPayload)`
-   Dispatches the already-generated JSON payload. The MVP prints to the console, but the dispatcher can later be replaced with file, REST API, Kafka, database, email, or Slack delivery.
+5. `AbstractSurveillanceModel.dispatchAlert(ModelConfig modelConfig, LocalDate businessDate, Alert alert, String alertPayload)`
+   Dispatches the already-generated JSON payload into alert history tables. Duplicate fingerprints are skipped so overlapping cumulative lookup windows do not create duplicate dispatch records.
 
 The main method intentionally runs JSON generation and dispatch step by step through the selected model:
 
 ```java
 for (Alert alert : alerts) {
     String alertPayload = model.generateJson(alert);
-    if (alertHistoryRepository.saveIfNew(modelConfig, businessDate, alert, alertPayload)) {
-        model.dispatchAlert(alertPayload);
+    if (model.dispatchAlert(modelConfig, businessDate, alert, alertPayload)) {
+        dispatchedAlerts++;
     }
 }
 ```
@@ -107,9 +107,9 @@ Table responsibilities:
 
 | Table | Purpose |
 | --- | --- |
-| `surveillance_model_master` | App-level metadata. Primary key is `appid`; key columns are `appid`, `region`, and `name`. |
-| `surveillance_model_config` | Execution model mapping. Key columns are `appid`, `modelid`, and `region`, plus execution metadata such as `model_code`, `model_name`, `model_class_name`, `run_mode`, and `source_system`. |
-| `surveillance_run_request` | Queue-style run request table. The worker claims `PENDING` rows in request order, marks them `RUNNING`, then writes `COMPLETED` or `FAILED` with processed trade and alert counts. |
+| `surveillance_model_master` | App and model metadata. Primary key is `appid`; key columns are `appid`, `region`, `name`, `model_code`, `model_name`, and `model_class_name`. |
+| `surveillance_model_config` | Execution model ID mapping. Key columns are `appid`, `modelid`, and `region`. |
+| `surveillance_run_request` | Queue-style run request table. Stored procedures claim `PENDING` and `FAILED` rows, mark them `RUNNING`, then write `COMPLETED` with generated alert count or `FAILED` with `error_message`. |
 | `surveillance_model_threshold` | Runtime thresholds. `evaluate()` calls `sp_get_surveillance_model_threshold` to retrieve amount/tolerance thresholds. The `lookup_days` column controls how far back `sp_get_ficc_trades` queries for cumulative surveillance. |
 | `ficc_wash_alert_history` | Alert dispatch history. It stores JSON payloads and a unique fingerprint based on app/model/region, alert type, match type, and related trade IDs so overlapping cumulative lookup windows do not dispatch the same report again. |
 | `ficc_wash_alert_history_trade` | Drill-out trade snapshot table. It stores each related trade for a generated alert, including trade date/time, instrument, side, quantity, amount, counterparty, account, trader, desk, book, broker, and BUY/SELL leg role. |
@@ -179,9 +179,6 @@ Example:
 
 ```yaml
 ficc:
-  run:
-    default-app-id: 1
-    default-region: NAMR
   database:
     url: jdbc:mysql://localhost:3306/ficc_surveillance
     user: root
@@ -202,34 +199,22 @@ Build and run:
 
 ```powershell
 .\mvnw.cmd clean package
-java -jar target\ficc-wash-trade-surveillance-1.0.0.jar --queue
+java -jar target\ficc-wash-trade-surveillance-1.0.0.jar
 ```
 
-Running with no arguments also processes the next pending queue request. The seed SQL inserts five pending NAMR requests for `2026-06-04` through `2026-06-08`.
-
-Run a specific pending request:
-
-```powershell
-java -jar target\ficc-wash-trade-surveillance-1.0.0.jar --request-id=1
-```
-
-You can still run the pipeline directly without the queue:
-
-```powershell
-java -jar target\ficc-wash-trade-surveillance-1.0.0.jar 1 NAMR 2026-06-08
-```
+Startup always reads `PENDING` and `FAILED` rows from `surveillance_run_request`, queues the claimed requests in the worker, and processes them. The seed SQL inserts five pending NAMR requests for `2026-06-04` through `2026-06-08`.
 
 Run as Spring Boot queue worker:
 
 ```powershell
-.\mvnw.cmd spring-boot:run -Dspring-boot.run.arguments="--queue"
+.\mvnw.cmd spring-boot:run
 ```
 
 Create another queue request manually:
 
 ```sql
-INSERT INTO surveillance_run_request (appid, region, business_date, requested_by, request_source)
-VALUES (1, 'NAMR', '2026-06-08', 'local-user', 'MANUAL_SQL');
+INSERT INTO surveillance_run_request (appid, region, business_date, requested_by)
+VALUES (1, 'NAMR', '2026-06-08', 'local-user');
 ```
 
 Run unit tests:
@@ -330,8 +315,6 @@ com.portfolio.ficc
   app
     FiccRunRequestWorker.java
     FiccSurveillanceApplication.java
-  config
-    RunConfig.java
   surveillance
     AbstractSurveillanceModel.java
     FiccWashTradeModel.java

@@ -83,8 +83,8 @@ public abstract class AbstractSurveillanceModel {
     /**
      * 5. Dispatch the alert payload after JSON generation.
      */
-    public void dispatchAlert(String alertPayload) {
-        alertDispatcher.dispatch(alertPayload);
+    public boolean dispatchAlert(ModelConfig modelConfig, LocalDate businessDate, Alert alert, String alertPayload) {
+        return alertDispatcher.dispatch(modelConfig, businessDate, alert, alertPayload);
     }
 
     protected Connection getConnection() throws SQLException {

@@ -1,7 +1,5 @@
 package com.portfolio.ficc.app;
 
-import com.portfolio.ficc.config.RunConfig;
-import com.portfolio.ficc.io.AlertHistoryRepository;
 import com.portfolio.ficc.io.DatabaseConfig;
 import com.portfolio.ficc.model.Alert;
 import com.portfolio.ficc.model.ModelConfig;
@@ -26,28 +24,13 @@ public class FiccSurveillanceApplication {
 
     private final DatabaseConfig databaseConfig;
     private final SurveillanceModelRegistry modelRegistry;
-    private final AlertHistoryRepository alertHistoryRepository;
-    private final RunConfig runConfig;
 
     public FiccSurveillanceApplication(
             DatabaseConfig databaseConfig,
-            SurveillanceModelRegistry modelRegistry,
-            AlertHistoryRepository alertHistoryRepository,
-            RunConfig runConfig
+            SurveillanceModelRegistry modelRegistry
     ) {
         this.databaseConfig = Objects.requireNonNull(databaseConfig, "databaseConfig is required");
         this.modelRegistry = Objects.requireNonNull(modelRegistry, "modelRegistry is required");
-        this.alertHistoryRepository = Objects.requireNonNull(alertHistoryRepository, "alertHistoryRepository is required");
-        this.runConfig = Objects.requireNonNull(runConfig, "runConfig is required");
-    }
-
-    public RunSummary run(String[] args) {
-        String[] safeArgs = args == null ? new String[0] : args;
-        int appId = safeArgs.length > 0 ? Integer.parseInt(safeArgs[0]) : runConfig.defaultAppId();
-        String region = safeArgs.length > 1 ? safeArgs[1] : runConfig.defaultRegion();
-        LocalDate businessDate = safeArgs.length > 2 ? LocalDate.parse(safeArgs[2]) : LocalDate.now();
-
-        return run(appId, region, businessDate);
     }
 
     public RunSummary run(int appId, String region, LocalDate businessDate) {
@@ -61,8 +44,7 @@ public class FiccSurveillanceApplication {
 
         for (Alert alert : alerts) {
             String alertPayload = model.generateJson(alert);
-            if (alertHistoryRepository.saveIfNew(modelConfig, businessDate, alert, alertPayload)) {
-                model.dispatchAlert(alertPayload);
+            if (model.dispatchAlert(modelConfig, businessDate, alert, alertPayload)) {
                 dispatchedAlerts++;
             } else {
                 duplicateAlerts++;

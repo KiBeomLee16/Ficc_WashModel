@@ -9,7 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.sql.Connection;
 import java.sql.Date;
-import java.sql.PreparedStatement;
+import java.sql.CallableStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
@@ -17,7 +17,6 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -28,30 +27,25 @@ class RunRequestRepositoryTest {
     private Connection connection;
 
     @Mock
-    private PreparedStatement selectStatement;
+    private CallableStatement claimStatement;
 
     @Mock
-    private PreparedStatement updateStatement;
+    private CallableStatement updateStatement;
 
     @Mock
     private ResultSet resultSet;
 
     @Test
-    void claimNextPendingRequestLocksOldestPendingRequestAndMarksRunning() throws Exception {
+    void claimNextRunnableRequestCallsClaimProcedureAndMapsResult() throws Exception {
         when(connection.getAutoCommit()).thenReturn(true);
-        when(connection.prepareStatement(argThat(sql ->
-                containsAll(sql, "SELECT", "surveillance_run_request", "FOR UPDATE SKIP LOCKED")
-        ))).thenReturn(selectStatement);
-        when(connection.prepareStatement(argThat(sql ->
-                containsAll(sql, "SET status = 'RUNNING'")
-        ))).thenReturn(updateStatement);
-        when(selectStatement.executeQuery()).thenReturn(resultSet);
+        when(connection.prepareCall("{CALL sp_claim_next_surveillance_run_request()}")).thenReturn(claimStatement);
+        when(claimStatement.executeQuery()).thenReturn(resultSet);
         when(resultSet.next()).thenReturn(true);
         stubRunRequestRow();
 
         RunRequestRepository repository = new ConnectionBackedRunRequestRepository(connection);
 
-        Optional<RunRequest> request = repository.claimNextPendingRequest("worker-1");
+        Optional<RunRequest> request = repository.claimNextRunnableRequest();
 
         assertTrue(request.isPresent());
         assertEquals(99L, request.get().requestId());
@@ -60,65 +54,36 @@ class RunRequestRepositoryTest {
         assertEquals(LocalDate.of(2026, 6, 8), request.get().businessDate());
 
         verify(connection).setAutoCommit(false);
-        verify(updateStatement).setString(1, "worker-1");
-        verify(updateStatement).setLong(2, 99L);
-        verify(updateStatement).executeUpdate();
+        verify(claimStatement).executeQuery();
         verify(connection).commit();
         verify(connection).setAutoCommit(true);
     }
 
     @Test
-    void claimRequestByIdUsesRequestIdPredicate() throws Exception {
-        when(connection.getAutoCommit()).thenReturn(true);
-        when(connection.prepareStatement(argThat(sql ->
-                containsAll(sql, "WHERE request_id = ?", "FOR UPDATE")
-        ))).thenReturn(selectStatement);
-        when(connection.prepareStatement(argThat(sql ->
-                containsAll(sql, "SET status = 'RUNNING'")
-        ))).thenReturn(updateStatement);
-        when(selectStatement.executeQuery()).thenReturn(resultSet);
-        when(resultSet.next()).thenReturn(true);
-        stubRunRequestRow();
-
-        RunRequestRepository repository = new ConnectionBackedRunRequestRepository(connection);
-
-        Optional<RunRequest> request = repository.claimRequestById(99L, "worker-1");
-
-        assertTrue(request.isPresent());
-        verify(selectStatement).setLong(1, 99L);
-        verify(updateStatement).setLong(2, 99L);
-    }
-
-    @Test
     void markCompletedPersistsRunCounts() throws Exception {
-        when(connection.prepareStatement(argThat(sql ->
-                containsAll(sql, "SET status = 'COMPLETED'")
-        ))).thenReturn(updateStatement);
+        when(connection.prepareCall("{CALL sp_mark_surveillance_run_request_completed(?, ?)}"))
+                .thenReturn(updateStatement);
 
         RunRequestRepository repository = new ConnectionBackedRunRequestRepository(connection);
 
         repository.markCompleted(runRequest(), runSummary());
 
-        verify(updateStatement).setInt(1, 40);
+        verify(updateStatement).setLong(1, 99L);
         verify(updateStatement).setInt(2, 2);
-        verify(updateStatement).setInt(3, 2);
-        verify(updateStatement).setInt(4, 0);
-        verify(updateStatement).setLong(5, 99L);
         verify(updateStatement).executeUpdate();
     }
 
     @Test
     void markFailedStoresTruncatedErrorMessage() throws Exception {
-        when(connection.prepareStatement(argThat(sql ->
-                containsAll(sql, "SET status = 'FAILED'")
-        ))).thenReturn(updateStatement);
+        when(connection.prepareCall("{CALL sp_mark_surveillance_run_request_failed(?, ?)}"))
+                .thenReturn(updateStatement);
 
         RunRequestRepository repository = new ConnectionBackedRunRequestRepository(connection);
 
         repository.markFailed(runRequest(), new IllegalStateException("database down"));
 
-        verify(updateStatement).setString(1, "IllegalStateException: database down");
-        verify(updateStatement).setLong(2, 99L);
+        verify(updateStatement).setLong(1, 99L);
+        verify(updateStatement).setString(2, "IllegalStateException: database down");
         verify(updateStatement).executeUpdate();
     }
 
@@ -127,20 +92,7 @@ class RunRequestRepositoryTest {
         when(resultSet.getInt("appid")).thenReturn(1);
         when(resultSet.getString("region")).thenReturn("NAMR");
         when(resultSet.getDate("business_date")).thenReturn(Date.valueOf("2026-06-08"));
-        when(resultSet.getString("status")).thenReturn("PENDING");
-        when(resultSet.getInt("attempt_count")).thenReturn(0);
-    }
-
-    private static boolean containsAll(String value, String... expectedParts) {
-        if (value == null) {
-            return false;
-        }
-        for (String expectedPart : expectedParts) {
-            if (!value.contains(expectedPart)) {
-                return false;
-            }
-        }
-        return true;
+        when(resultSet.getString("status")).thenReturn("RUNNING");
     }
 
     private static RunRequest runRequest() {
@@ -149,8 +101,7 @@ class RunRequestRepositoryTest {
                 1,
                 "NAMR",
                 LocalDate.of(2026, 6, 8),
-                "RUNNING",
-                1
+                "RUNNING"
         );
     }
 

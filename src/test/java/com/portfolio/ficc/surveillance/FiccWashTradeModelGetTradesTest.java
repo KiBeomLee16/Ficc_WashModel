@@ -1,6 +1,5 @@
 package com.portfolio.ficc.surveillance;
 
-import com.portfolio.ficc.io.AlertDispatcher;
 import com.portfolio.ficc.io.DatabaseConfig;
 import com.portfolio.ficc.model.ModelConfig;
 import com.portfolio.ficc.model.Side;
@@ -23,6 +22,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static com.portfolio.ficc.TestConfigs.alertDispatcher;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -123,7 +123,7 @@ class FiccWashTradeModelGetTradesTest {
 
         ConnectionBackedFiccWashTradeModel(Connection connection) {
             super(new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""),
-                    new AlertDispatcher());
+                    alertDispatcher());
             this.connection = connection;
         }
 

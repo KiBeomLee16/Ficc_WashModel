@@ -1,10 +1,15 @@
 package com.portfolio.ficc;
 
-import com.portfolio.ficc.config.RunConfig;
+import com.portfolio.ficc.io.AlertDispatcher;
+import com.portfolio.ficc.io.AlertHistoryRepository;
+import com.portfolio.ficc.io.DatabaseConfig;
 
 public final class TestConfigs {
 
-    public static final RunConfig RUN_CONFIG = new RunConfig(1, "NAMR");
+    public static AlertDispatcher alertDispatcher() {
+        DatabaseConfig databaseConfig = new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", "");
+        return new AlertDispatcher(new AlertHistoryRepository(databaseConfig));
+    }
 
     private TestConfigs() {
     }

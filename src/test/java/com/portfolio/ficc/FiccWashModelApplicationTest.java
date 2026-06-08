@@ -23,13 +23,13 @@ class FiccWashModelApplicationTest {
     }
 
     @Test
-    void commandLineRunnerDelegatesToRunRequestWorker() {
+    void commandLineRunnerStartsRunRequestWorkerWithoutUsingArgs() {
         FiccRunRequestWorker runRequestWorker = mock(FiccRunRequestWorker.class);
         FiccWashModelApplication application = new FiccWashModelApplication(runRequestWorker);
-        String[] args = {"--queue"};
+        String[] args = {"ignored"};
 
         application.run(args);
 
-        verify(runRequestWorker).run(args);
+        verify(runRequestWorker).run();
     }
 }

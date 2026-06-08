@@ -5,19 +5,15 @@ import com.portfolio.ficc.model.RunRequest;
 import com.portfolio.ficc.model.RunSummary;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
+import java.util.ArrayDeque;
 import java.util.Optional;
-import java.util.UUID;
+import java.util.Queue;
 
 @Service
 public class FiccRunRequestWorker {
 
-    private static final String QUEUE_ARGUMENT = "--queue";
-    private static final String REQUEST_ID_ARGUMENT_PREFIX = "--request-id=";
-
     private final FiccSurveillanceApplication surveillanceApplication;
     private final RunRequestRepository runRequestRepository;
-    private final String workerId;
 
     public FiccRunRequestWorker(
             FiccSurveillanceApplication surveillanceApplication,
@@ -25,41 +21,23 @@ public class FiccRunRequestWorker {
     ) {
         this.surveillanceApplication = surveillanceApplication;
         this.runRequestRepository = runRequestRepository;
-        this.workerId = "ficc-worker-" + UUID.randomUUID();
     }
 
-    public void run(String[] args) {
-        String[] safeArgs = args == null ? new String[0] : args;
-        Optional<Long> requestId = requestId(safeArgs);
-
-        if (safeArgs.length == 0 || hasArgument(safeArgs, QUEUE_ARGUMENT)) {
-            processNextPendingRequest();
-            return;
-        }
-        if (requestId.isPresent()) {
-            processRequestById(requestId.get());
-            return;
-        }
-
-        surveillanceApplication.run(safeArgs);
+    public void run() {
+        processRunnableRequests();
     }
 
-    void processNextPendingRequest() {
-        Optional<RunRequest> request = runRequestRepository.claimNextPendingRequest(workerId());
-        if (request.isEmpty()) {
-            System.out.println("No pending surveillance run request found.");
-            return;
-        }
-        processClaimedRequest(request.get());
-    }
+    void processRunnableRequests() {
+        Queue<RunRequest> runRequests = claimRunnableRequests();
 
-    void processRequestById(long requestId) {
-        Optional<RunRequest> request = runRequestRepository.claimRequestById(requestId, workerId());
-        if (request.isEmpty()) {
-            System.out.printf("No pending surveillance run request found for requestId=%d.%n", requestId);
+        if (runRequests.isEmpty()) {
+            System.out.println("No pending or failed surveillance run request found.");
             return;
         }
-        processClaimedRequest(request.get());
+
+        while (!runRequests.isEmpty()) {
+            processClaimedRequest(runRequests.remove());
+        }
     }
 
     private void processClaimedRequest(RunRequest request) {
@@ -81,23 +59,17 @@ public class FiccRunRequestWorker {
         } catch (RuntimeException exception) {
             runRequestRepository.markFailed(request, exception);
             System.out.printf("Run request %d failed: %s%n", request.requestId(), exception.getMessage());
-            throw exception;
         }
     }
 
-    private Optional<Long> requestId(String[] args) {
-        return Arrays.stream(args)
-                .filter(argument -> argument.startsWith(REQUEST_ID_ARGUMENT_PREFIX))
-                .map(argument -> argument.substring(REQUEST_ID_ARGUMENT_PREFIX.length()))
-                .map(Long::parseLong)
-                .findFirst();
-    }
-
-    private boolean hasArgument(String[] args, String expectedArgument) {
-        return Arrays.stream(args).anyMatch(expectedArgument::equalsIgnoreCase);
-    }
-
-    String workerId() {
-        return workerId;
+    private Queue<RunRequest> claimRunnableRequests() {
+        Queue<RunRequest> runRequests = new ArrayDeque<>();
+        while (true) {
+            Optional<RunRequest> request = runRequestRepository.claimNextRunnableRequest();
+            if (request.isEmpty()) {
+                return runRequests;
+            }
+            runRequests.add(request.get());
+        }
     }
 }
