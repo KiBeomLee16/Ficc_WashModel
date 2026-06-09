@@ -139,9 +139,9 @@ INSERT INTO surveillance_model_master (
     description,
     enabled
 ) VALUES
-(1, 'NAMR', 'NAMR FICC Surveillance App', 'FICC_WASH_TRADE', 'FICC Wash Trade Surveillance Model', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'North America FICC surveillance metadata.', TRUE),
-(2, 'EMEA', 'EMEA FICC Surveillance App', 'FICC_WASH_TRADE', 'FICC Wash Trade Surveillance Model', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Europe, Middle East, and Africa FICC surveillance metadata.', TRUE),
-(3, 'APAC', 'APAC FICC Surveillance App', 'FICC_WASH_TRADE', 'FICC Wash Trade Surveillance Model', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Asia Pacific FICC surveillance metadata.', TRUE);
+(1, 'NAMR', 'NAMR FICC_WASH Model', 'FICC_WASH_TRADE', 'FICC Trade Surveillance', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'North America FICC_WASH Model.', TRUE),
+(2, 'EMEA', 'EMEA FICC_WASH Model', 'FICC_WASH_TRADE', 'FICC Trade Surveillance', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Europe, Middle East, and Africa FICC_WASH Model.', TRUE),
+(3, 'APAC', 'APAC FICC_WASH Model', 'FICC_WASH_TRADE', 'FICC Trade Surveillance', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Asia Pacific FICC_WASH Model.', TRUE);
 
 INSERT INTO surveillance_model_config (
     appid,
