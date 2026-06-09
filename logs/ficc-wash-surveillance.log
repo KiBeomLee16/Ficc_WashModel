@@ -1,0 +1,92 @@
+2026-06-09T12:04:41.744+09:00  INFO 40316 --- [main] c.p.ficc.FiccWashModelApplication        : Starting FiccWashModelApplication using Java 21.0.10 with PID 40316 (C:\Users\GRAVITY\eclipse-workspace\FICC_Wash_Model\target\classes started by GRAVITY in C:\Users\GRAVITY\eclipse-workspace\FICC_Wash_Model)
+2026-06-09T12:04:41.747+09:00  INFO 40316 --- [main] c.p.ficc.FiccWashModelApplication        : No active profile set, falling back to 1 default profile: "default"
+2026-06-09T12:04:42.858+09:00  INFO 40316 --- [main] c.p.ficc.FiccWashModelApplication        : Started FiccWashModelApplication in 1.658 seconds (process running for 2.372)
+2026-06-09T12:04:42.863+09:00  INFO 40316 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Starting surveillance run request worker.
+2026-06-09T12:04:43.403+09:00  INFO 40316 --- [main] c.p.ficc.app.FiccRunRequestWorker        : No pending or failed surveillance run request found.
+2026-06-09T12:05:32.537+09:00  INFO 10504 --- [main] c.p.ficc.FiccWashModelApplication        : Starting FiccWashModelApplication using Java 21.0.10 with PID 10504 (C:\Users\GRAVITY\eclipse-workspace\FICC_Wash_Model\target\classes started by GRAVITY in C:\Users\GRAVITY\eclipse-workspace\FICC_Wash_Model)
+2026-06-09T12:05:32.540+09:00  INFO 10504 --- [main] c.p.ficc.FiccWashModelApplication        : No active profile set, falling back to 1 default profile: "default"
+2026-06-09T12:05:33.287+09:00  INFO 10504 --- [main] c.p.ficc.FiccWashModelApplication        : Started FiccWashModelApplication in 1.256 seconds (process running for 1.968)
+2026-06-09T12:05:33.293+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Starting surveillance run request worker.
+2026-06-09T12:05:34.098+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Claimed 5 runnable surveillance request(s).
+2026-06-09T12:05:34.100+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.101+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Run request 1 started: appid=1, region=NAMR, businessDate=2026-06-04.
+2026-06-09T12:05:34.101+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.102+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Starting surveillance pipeline: appid=1, region=NAMR, businessDate=2026-06-04.
+2026-06-09T12:05:34.102+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.136+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Resolved surveillance model: appid=1, modelid=1, modelCode=FICC_WASH_TRADE, modelClass=com.portfolio.ficc.surveillance.FiccWashTradeModel, region=NAMR.
+2026-06-09T12:05:34.137+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.175+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Loaded 9 trades: region=NAMR, businessDate=2026-06-04.
+2026-06-09T12:05:34.313+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.313+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Evaluated surveillance model and generated 2 alerts : region=NAMR, businessDate=2026-06-04.
+2026-06-09T12:05:34.364+09:00  INFO 10504 --- [main] c.p.ficc.io.AlertHistoryRepository       : Saved alert history: alertHistoryId=1, alertId=ficc_wash_alert_1, matchType=ONE_TIME_TRANSACTION, relatedTrades=2, appid=1, modelid=1, region=NAMR, businessDate=2026-06-04.
+2026-06-09T12:05:34.413+09:00  INFO 10504 --- [main] c.p.ficc.io.AlertHistoryRepository       : Saved alert history: alertHistoryId=2, alertId=ficc_wash_alert_2, matchType=CUMULATIVE_TRANSACTION, relatedTrades=4, appid=1, modelid=1, region=NAMR, businessDate=2026-06-04.
+2026-06-09T12:05:34.416+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.417+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Completed surveillance pipeline: tradesProcessed=9, alertsGenerated=2, alertsDispatched=2, duplicateAlerts=0, appid=1, modelid=1, region=NAMR, businessDate=2026-06-04.
+2026-06-09T12:05:34.452+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.452+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Run request 1 completed: tradesProcessed=9, alertsGenerated=2, alertsDispatched=2, duplicateAlerts=0.
+2026-06-09T12:05:34.453+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.453+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Run request 2 started: appid=1, region=NAMR, businessDate=2026-06-05.
+2026-06-09T12:05:34.453+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.453+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Starting surveillance pipeline: appid=1, region=NAMR, businessDate=2026-06-05.
+2026-06-09T12:05:34.454+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.476+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Resolved surveillance model: appid=1, modelid=1, modelCode=FICC_WASH_TRADE, modelClass=com.portfolio.ficc.surveillance.FiccWashTradeModel, region=NAMR.
+2026-06-09T12:05:34.477+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.507+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Loaded 18 trades: region=NAMR, businessDate=2026-06-05.
+2026-06-09T12:05:34.631+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.631+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Evaluated surveillance model and generated 2 alerts : region=NAMR, businessDate=2026-06-05.
+2026-06-09T12:05:34.661+09:00  INFO 10504 --- [main] c.p.ficc.io.AlertHistoryRepository       : Saved alert history: alertHistoryId=3, alertId=ficc_wash_alert_3, matchType=ONE_TIME_TRANSACTION, relatedTrades=2, appid=1, modelid=1, region=NAMR, businessDate=2026-06-05.
+2026-06-09T12:05:34.704+09:00  INFO 10504 --- [main] c.p.ficc.io.AlertHistoryRepository       : Saved alert history: alertHistoryId=4, alertId=ficc_wash_alert_4, matchType=CUMULATIVE_TRANSACTION, relatedTrades=4, appid=1, modelid=1, region=NAMR, businessDate=2026-06-05.
+2026-06-09T12:05:34.706+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.706+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Completed surveillance pipeline: tradesProcessed=18, alertsGenerated=2, alertsDispatched=2, duplicateAlerts=0, appid=1, modelid=1, region=NAMR, businessDate=2026-06-05.
+2026-06-09T12:05:34.741+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.741+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Run request 2 completed: tradesProcessed=18, alertsGenerated=2, alertsDispatched=2, duplicateAlerts=0.
+2026-06-09T12:05:34.741+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.741+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Run request 3 started: appid=1, region=NAMR, businessDate=2026-06-06.
+2026-06-09T12:05:34.741+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.741+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Starting surveillance pipeline: appid=1, region=NAMR, businessDate=2026-06-06.
+2026-06-09T12:05:34.742+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.764+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Resolved surveillance model: appid=1, modelid=1, modelCode=FICC_WASH_TRADE, modelClass=com.portfolio.ficc.surveillance.FiccWashTradeModel, region=NAMR.
+2026-06-09T12:05:34.764+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.790+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Loaded 27 trades: region=NAMR, businessDate=2026-06-06.
+2026-06-09T12:05:34.899+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.899+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Evaluated surveillance model and generated 2 alerts : region=NAMR, businessDate=2026-06-06.
+2026-06-09T12:05:34.927+09:00  INFO 10504 --- [main] c.p.ficc.io.AlertHistoryRepository       : Saved alert history: alertHistoryId=5, alertId=ficc_wash_alert_5, matchType=ONE_TIME_TRANSACTION, relatedTrades=2, appid=1, modelid=1, region=NAMR, businessDate=2026-06-06.
+2026-06-09T12:05:34.961+09:00  INFO 10504 --- [main] c.p.ficc.io.AlertHistoryRepository       : Saved alert history: alertHistoryId=6, alertId=ficc_wash_alert_6, matchType=CUMULATIVE_TRANSACTION, relatedTrades=4, appid=1, modelid=1, region=NAMR, businessDate=2026-06-06.
+2026-06-09T12:05:34.962+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.962+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Completed surveillance pipeline: tradesProcessed=27, alertsGenerated=2, alertsDispatched=2, duplicateAlerts=0, appid=1, modelid=1, region=NAMR, businessDate=2026-06-06.
+2026-06-09T12:05:34.987+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.987+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Run request 3 completed: tradesProcessed=27, alertsGenerated=2, alertsDispatched=2, duplicateAlerts=0.
+2026-06-09T12:05:34.987+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.987+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Run request 4 started: appid=1, region=NAMR, businessDate=2026-06-07.
+2026-06-09T12:05:34.988+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:34.988+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Starting surveillance pipeline: appid=1, region=NAMR, businessDate=2026-06-07.
+2026-06-09T12:05:34.988+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.012+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Resolved surveillance model: appid=1, modelid=1, modelCode=FICC_WASH_TRADE, modelClass=com.portfolio.ficc.surveillance.FiccWashTradeModel, region=NAMR.
+2026-06-09T12:05:35.013+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.041+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Loaded 34 trades: region=NAMR, businessDate=2026-06-07.
+2026-06-09T12:05:35.149+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.149+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Evaluated surveillance model and generated 2 alerts : region=NAMR, businessDate=2026-06-07.
+2026-06-09T12:05:35.177+09:00  INFO 10504 --- [main] c.p.ficc.io.AlertHistoryRepository       : Saved alert history: alertHistoryId=7, alertId=ficc_wash_alert_7, matchType=ONE_TIME_TRANSACTION, relatedTrades=2, appid=1, modelid=1, region=NAMR, businessDate=2026-06-07.
+2026-06-09T12:05:35.210+09:00  INFO 10504 --- [main] c.p.ficc.io.AlertHistoryRepository       : Saved alert history: alertHistoryId=8, alertId=ficc_wash_alert_8, matchType=CUMULATIVE_TRANSACTION, relatedTrades=4, appid=1, modelid=1, region=NAMR, businessDate=2026-06-07.
+2026-06-09T12:05:35.211+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.211+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Completed surveillance pipeline: tradesProcessed=34, alertsGenerated=2, alertsDispatched=2, duplicateAlerts=0, appid=1, modelid=1, region=NAMR, businessDate=2026-06-07.
+2026-06-09T12:05:35.237+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.238+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Run request 4 completed: tradesProcessed=34, alertsGenerated=2, alertsDispatched=2, duplicateAlerts=0.
+2026-06-09T12:05:35.238+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.238+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Run request 5 started: appid=1, region=NAMR, businessDate=2026-06-08.
+2026-06-09T12:05:35.239+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.239+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Starting surveillance pipeline: appid=1, region=NAMR, businessDate=2026-06-08.
+2026-06-09T12:05:35.239+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.257+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Resolved surveillance model: appid=1, modelid=1, modelCode=FICC_WASH_TRADE, modelClass=com.portfolio.ficc.surveillance.FiccWashTradeModel, region=NAMR.
+2026-06-09T12:05:35.257+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.279+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Loaded 40 trades: region=NAMR, businessDate=2026-06-08.
+2026-06-09T12:05:35.382+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.382+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Evaluated surveillance model and generated 2 alerts : region=NAMR, businessDate=2026-06-08.
+2026-06-09T12:05:35.409+09:00  INFO 10504 --- [main] c.p.ficc.io.AlertHistoryRepository       : Saved alert history: alertHistoryId=9, alertId=ficc_wash_alert_9, matchType=ONE_TIME_TRANSACTION, relatedTrades=2, appid=1, modelid=1, region=NAMR, businessDate=2026-06-08.
+2026-06-09T12:05:35.440+09:00  INFO 10504 --- [main] c.p.ficc.io.AlertHistoryRepository       : Saved alert history: alertHistoryId=10, alertId=ficc_wash_alert_10, matchType=CUMULATIVE_TRANSACTION, relatedTrades=4, appid=1, modelid=1, region=NAMR, businessDate=2026-06-08.
+2026-06-09T12:05:35.441+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.442+09:00  INFO 10504 --- [main] c.p.f.app.FiccSurveillanceApplication    : Completed surveillance pipeline: tradesProcessed=40, alertsGenerated=2, alertsDispatched=2, duplicateAlerts=0, appid=1, modelid=1, region=NAMR, businessDate=2026-06-08.
+2026-06-09T12:05:35.470+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.470+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Run request 5 completed: tradesProcessed=40, alertsGenerated=2, alertsDispatched=2, duplicateAlerts=0.
+2026-06-09T12:05:35.471+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : ------------------------------------------------------------------------------------------
+2026-06-09T12:05:35.471+09:00  INFO 10504 --- [main] c.p.ficc.app.FiccRunRequestWorker        : Finished processing claimed surveillance requests.

@@ -3,3 +3,15 @@ ficc:
     url: jdbc:mysql://localhost:3306/ficc_surveillance
     user: root
     password: root
+
+logging:
+  file:
+    name: logs/ficc-wash-surveillance.log
+  logback:
+    rollingpolicy:
+      file-name-pattern: logs/ficc-wash-surveillance.%d{yyyy-MM-dd}.%i.log.gz
+      max-file-size: 10MB
+      max-history: 30
+      total-size-cap: 1GB
+  level:
+    com.portfolio.ficc: INFO

@@ -4,6 +4,19 @@ Java 17 Spring Boot portfolio project for a rule-based FICC wash trade surveilla
 
 FICC means Fixed Income, Currencies, and Commodities. The application can run from a database-backed request queue. Each request contains an `appid`, `region`, and `businessDate`; the worker claims a pending request, marks it running, resolves the matching surveillance model class from MySQL master/config tables, loads trades through the concrete model, looks up runtime thresholds and lookup windows from a threshold table, evaluates opposite-side matched trades, creates explainable surveillance reports, converts reports to JSON, stores alert history for duplicate prevention, dispatches new alerts to the console, and marks the request completed or failed.
 
+## Key Features
+
+- Spring Boot queue worker that processes `PENDING` and `FAILED` surveillance run requests from MySQL.
+- Database-driven model lookup using `appid`, `region`, and `model_class_name`.
+- Stored procedure based trade ingestion through `sp_get_ficc_trades`.
+- Rule-based FICC wash trade detection with no machine learning dependency.
+- Two detection modes: one-time same-day matching and cumulative lookup-window matching.
+- Runtime threshold lookup from `surveillance_model_threshold`, including `lookup_days` for cumulative surveillance.
+- Explainable alert JSON containing matched trades, aggregate amounts, threshold values, and detection reasons.
+- Duplicate alert prevention through alert fingerprints in `ficc_wash_alert_history`.
+- Drill-out trade storage in `ficc_wash_alert_history_trade` for investigation and interview demos.
+- Daily rolling application logs under the local `logs` directory.
+
 ## Design Shape
 
 The Spring Boot entry point is intentionally thin:
@@ -35,22 +48,31 @@ The database stores `model_class_name`, and Java resolves it through `Surveillan
 
 Runtime flow:
 
-```text
-queued input: surveillance_run_request row
-  -> Spring Boot main
-  -> CommandLineRunner delegates to FiccRunRequestWorker
-  -> claim PENDING and FAILED requests through sp_claim_next_surveillance_run_request
-  -> FiccSurveillanceApplication.getSpecificModel(appid, region) calls sp_get_surveillance_model_config
-  -> read model_class_name from master/config result
-  -> find model in SurveillanceModelRegistry
-  -> model.getTrades(modelConfig, region, businessDate)
-  -> sp_get_ficc_trades joins threshold lookup_days and loads the lookup window
-  -> model.evaluate(modelConfig, trades, businessDate)
-  -> lookup runtime thresholds by stored procedure
-  -> model.generateJson(alert)
-  -> model.dispatchAlert(modelConfig, businessDate, alert, alertPayload)
-  -> save alert history and drill-out trades if fingerprint is new
-  -> mark request COMPLETED with generated alert count, or FAILED with error_message
+```mermaid
+flowchart TD
+    A["Run Request<br/>PENDING / FAILED"] --> B["Load Model Config<br/>appid + region"]
+    B --> C["Select Model<br/>(FiccWashTradeModel)"]
+    C --> D["getTrades()"]
+    D --> E["evaluate()"]
+
+    E --> F["One-time Test"]
+    E --> G["Cumulative Test"]
+
+    F --> H["Create Alert<br/>generateAlertId()"]
+    G --> H
+
+    H --> I["generateJson(alert)"]
+    I --> J["dispatchAlert(payload)"]
+    J --> K["Duplicate Check<br/>saveIfNew()"]
+
+    K --> L["Save Alert History"]
+    L --> M["Save Drill-out Trades"]
+    M --> N["Mark Request COMPLETED"]
+
+    K --> O["Skip Duplicate"]
+    O --> N
+
+    A --> P["Mark Request FAILED<br/>on exception"]
 ```
 
 ## Five-Method Pipeline
@@ -182,10 +204,40 @@ ficc:
   database:
     url: jdbc:mysql://localhost:3306/ficc_surveillance
     user: root
-    password: ""
+    password: root
+
+logging:
+  file:
+    name: logs/ficc-wash-surveillance.log
+  logback:
+    rollingpolicy:
+      file-name-pattern: logs/ficc-wash-surveillance.%d{yyyy-MM-dd}.%i.log.gz
+      max-file-size: 10MB
+      max-history: 30
+      total-size-cap: 1GB
+  level:
+    com.portfolio.ficc: INFO
 ```
 
 Stored procedure names are hard-coded as Java class fields in the application/model classes.
+
+## Application Logging
+
+The active application log is written to:
+
+```text
+logs/ficc-wash-surveillance.log
+```
+
+Spring Boot Logback rolling policy keeps daily rolling files with a size index:
+
+```text
+logs/ficc-wash-surveillance.2026-06-09.0.log.gz
+logs/ficc-wash-surveillance.2026-06-09.1.log.gz
+logs/ficc-wash-surveillance.2026-06-10.0.log.gz
+```
+
+The current configuration keeps up to 30 days of logs, rolls again when the active file reaches 10 MB, and caps retained log storage at 1 GB.
 
 ## How To Run
 
@@ -210,12 +262,62 @@ Run as Spring Boot queue worker:
 .\mvnw.cmd spring-boot:run
 ```
 
-Create another queue request manually:
+## Local MySQL Demo Steps
+
+Use these steps when running the project locally with MySQL Workbench.
+
+1. Create or reset the local demo schema by running:
+
+```sql
+SOURCE C:/Users/GRAVITY/eclipse-workspace/FICC_Wash_Model/sql/mysql_schema_and_sample_data.sql;
+```
+
+2. Confirm the seeded run requests:
+
+```sql
+SELECT request_id, appid, region, business_date, status, requested_by
+FROM surveillance_run_request
+ORDER BY request_id;
+```
+
+3. Start the application from the project root:
+
+```powershell
+.\mvnw.cmd spring-boot:run
+```
+
+4. Confirm the queue moved to `COMPLETED` or `FAILED`:
+
+```sql
+SELECT request_id, appid, region, business_date, status, generated_alert_count, started_at, completed_at, error_message
+FROM surveillance_run_request
+ORDER BY request_id DESC;
+```
+
+5. Review generated alert history:
+
+```sql
+SELECT alert_history_id, alert_id, alert_type, match_type, region, business_date, created_at
+FROM ficc_wash_alert_history
+ORDER BY alert_history_id DESC;
+```
+
+6. Drill into the trades behind each alert:
+
+```sql
+SELECT alert_history_id, trade_sequence, trade_id, trade_date, side, quantity, total_amount, counterparty_id, trade_role
+FROM ficc_wash_alert_history_trade
+ORDER BY alert_history_id DESC, trade_sequence;
+```
+
+7. Insert a new manual request for a repeat run:
 
 ```sql
 INSERT INTO surveillance_run_request (appid, region, business_date, requested_by)
-VALUES (1, 'NAMR', '2026-06-08', 'local-user');
+VALUES (1, 'NAMR', '2026-06-08', 'local-demo');
 ```
+
+8. Run the application again and compare alert counts with history records. If a cumulative alert uses the same related trade set as a previous run, the duplicate fingerprint prevents another dispatch.
 
 Run unit tests:
 

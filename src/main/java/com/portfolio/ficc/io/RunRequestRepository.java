@@ -2,6 +2,8 @@ package com.portfolio.ficc.io;
 
 import com.portfolio.ficc.model.RunRequest;
 import com.portfolio.ficc.model.RunSummary;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.sql.CallableStatement;
@@ -14,6 +16,8 @@ import java.util.Optional;
 
 @Component
 public class RunRequestRepository {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(RunRequestRepository.class);
 
     private static final String CLAIM_NEXT_REQUEST_CALL = "{CALL sp_claim_next_surveillance_run_request()}";
     private static final String MARK_COMPLETED_CALL = "{CALL sp_mark_surveillance_run_request_completed(?, ?)}";
@@ -28,8 +32,14 @@ public class RunRequestRepository {
     }
 
     public Optional<RunRequest> claimNextRunnableRequest() {
-        return claimRequest(CLAIM_NEXT_REQUEST_CALL, statement -> {
+        Optional<RunRequest> request = claimRequest(CLAIM_NEXT_REQUEST_CALL, statement -> {
         });
+//        request.ifPresentOrElse(
+//                current -> LOGGER.info("Claimed surveillance run request: requestId={}, status={}, appid={}, region={}, businessDate={}.",
+//                        current.requestId(), current.status(), current.appId(), current.region(), current.businessDate()),
+//                () -> LOGGER.debug("No runnable surveillance run request returned by claim procedure.")
+//        );
+        return request;
     }
 
     public void markCompleted(RunRequest request, RunSummary summary) {
@@ -42,6 +52,8 @@ public class RunRequestRepository {
             statement.setLong(1, request.requestId());
             statement.setInt(2, summary.alertsGenerated());
             statement.executeUpdate();
+//            LOGGER.info("Marked surveillance run request completed: requestId={}, alertsGenerated={}.",
+//                    request.requestId(), summary.alertsGenerated());
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to mark run request completed requestId="
                     + request.requestId(), exception);
@@ -58,6 +70,9 @@ public class RunRequestRepository {
             statement.setLong(1, request.requestId());
             statement.setString(2, errorMessage(failure));
             statement.executeUpdate();
+            LOGGER.info("------------------------------------------------------------------------------------------");
+            LOGGER.warn("Marked surveillance run request failed: requestId={}, error={}.",
+                    request.requestId(), errorMessage(failure));
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to mark run request failed requestId="
                     + request.requestId(), exception);
@@ -76,11 +91,13 @@ public class RunRequestRepository {
             boolean originalAutoCommit = connection.getAutoCommit();
             try {
                 connection.setAutoCommit(false);
+                LOGGER.debug("Calling run request claim procedure: {}.", callSql);
                 Optional<RunRequest> request = callClaimProcedure(connection, callSql, binder);
                 connection.commit();
                 return request;
             } catch (SQLException exception) {
                 rollbackQuietly(connection);
+                LOGGER.error("Failed while claiming surveillance run request. Rolling back transaction.", exception);
                 throw exception;
             } finally {
                 restoreAutoCommitQuietly(connection, originalAutoCommit);

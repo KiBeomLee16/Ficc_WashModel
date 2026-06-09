@@ -3,6 +3,8 @@ package com.portfolio.ficc.io;
 import com.portfolio.ficc.model.Alert;
 import com.portfolio.ficc.model.ModelConfig;
 import com.portfolio.ficc.model.Trade;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -24,6 +26,8 @@ import java.util.stream.Collectors;
 
 @Component
 public class AlertHistoryRepository {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AlertHistoryRepository.class);
 
     private static final String INSERT_ALERT_HISTORY_SQL = """
             INSERT INTO ficc_wash_alert_history (
@@ -103,11 +107,30 @@ public class AlertHistoryRepository {
                 );
                 insertAlertHistoryTrades(connection, alertHistoryId, alert);
                 connection.commit();
+                LOGGER.info("Saved alert history: alertHistoryId={}, alertId={}, matchType={}, relatedTrades={}, appid={}, modelid={}, region={}, businessDate={}.",
+                        alertHistoryId,
+                        alert.alertId(),
+                        alert.matchType(),
+                        alert.relatedTrades().size(),
+                        modelConfig.appId(),
+                        modelConfig.modelId(),
+                        modelConfig.region(),
+                        businessDate);
             } catch (DuplicateAlertHistoryException duplicateAlert) {
                 rollbackQuietly(connection);
+//                LOGGER.warn("Duplicate alert history skipped: alertId={}, matchType={}, fingerprint={}, appid={}, modelid={}, region={}, businessDate={}.",
+//                        alert.alertId(),
+//                        alert.matchType(),
+//                        alertFingerprint,
+//                        modelConfig.appId(),
+//                        modelConfig.modelId(),
+//                        modelConfig.region(),
+//                        businessDate);
                 return false;
             } catch (SQLException exception) {
                 rollbackQuietly(connection);
+                LOGGER.error("Failed to save alert history. Rolling back alert history transaction: alertId={}.",
+                        alert.alertId(), exception);
                 throw exception;
             } finally {
                 restoreAutoCommitQuietly(connection, originalAutoCommit);

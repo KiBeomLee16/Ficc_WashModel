@@ -15,11 +15,14 @@ import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class FiccSurveillanceApplication {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(FiccSurveillanceApplication.class);
     private static final String MODEL_CONFIG_PROCEDURE = "sp_get_surveillance_model_config";
 
     private final DatabaseConfig databaseConfig;
@@ -34,11 +37,26 @@ public class FiccSurveillanceApplication {
     }
 
     public RunSummary run(int appId, String region, LocalDate businessDate) {
+    	LOGGER.info("------------------------------------------------------------------------------------------");
+        LOGGER.info("Starting surveillance pipeline: appid={}, region={}, businessDate={}.",
+                appId, region, businessDate);
+        LOGGER.info("------------------------------------------------------------------------------------------");
         ModelConfig modelConfig = getSpecificModel(appId, region);
+        LOGGER.info("Resolved surveillance model: appid={}, modelid={}, modelCode={}, modelClass={}, region={}.",
+                modelConfig.appId(),
+                modelConfig.modelId(),
+                modelConfig.modelCode(),
+                modelConfig.modelClassName(),
+                modelConfig.region());
         AbstractSurveillanceModel model = getModel(modelConfig);
-
+        LOGGER.info("------------------------------------------------------------------------------------------");
         List<Trade> trades = model.getTrades(modelConfig, region, businessDate);
+        LOGGER.info("Loaded {} trades: region={}, businessDate={}.",
+                trades.size(),  modelConfig.region(), businessDate);
         List<Alert> alerts = model.evaluate(modelConfig, trades, businessDate);
+        LOGGER.info("------------------------------------------------------------------------------------------");
+        LOGGER.info("Evaluated surveillance model and generated {} alerts : region={}, businessDate={}.",
+                alerts.size(), modelConfig.region(), businessDate);
         int dispatchedAlerts = 0;
         int duplicateAlerts = 0;
 
@@ -48,11 +66,22 @@ public class FiccSurveillanceApplication {
                 dispatchedAlerts++;
             } else {
                 duplicateAlerts++;
-                System.out.printf("Skipped duplicate alert %s for appid=%d, modelid=%d, region=%s, businessDate=%s.%n",
-                        alert.alertId(), appId, modelConfig.modelId(), modelConfig.region(), businessDate);
+//                LOGGER.warn("Skipped duplicate alert: alertId={}, appid={}, modelid={}, region={}, businessDate={}.",
+//                        alert.alertId(), appId, modelConfig.modelId(), modelConfig.region(), businessDate);
+//                System.out.printf("Skipped duplicate alert %s for appid=%d, modelid=%d, region=%s, businessDate=%s.%n",
+//                        alert.alertId(), appId, modelConfig.modelId(), modelConfig.region(), businessDate);
             }
         }
-
+        LOGGER.info("------------------------------------------------------------------------------------------");
+        LOGGER.info("Completed surveillance pipeline: tradesProcessed={}, alertsGenerated={}, alertsDispatched={}, duplicateAlerts={}, appid={}, modelid={}, region={}, businessDate={}.",
+                trades.size(),
+                alerts.size(),
+                dispatchedAlerts,
+                duplicateAlerts,
+                appId,
+                modelConfig.modelId(),
+                modelConfig.region(),
+                businessDate);
         System.out.printf("Processed %d trades for appid=%d, modelid=%d, model=%s, class=%s, region=%s, businessDate=%s and dispatched %d alerts, skipped %d duplicates.%n",
                 trades.size(), appId, modelConfig.modelId(), modelConfig.modelCode(),
                 modelConfig.modelClassName(), modelConfig.region(), businessDate, dispatchedAlerts, duplicateAlerts);
@@ -79,6 +108,9 @@ public class FiccSurveillanceApplication {
         }
         String normalizedRegion = region.toUpperCase();
         String callSql = "{CALL " + MODEL_CONFIG_PROCEDURE + "(?, ?)}";
+
+        LOGGER.debug("Loading model config with stored procedure {} for appid={}, region={}.",
+                MODEL_CONFIG_PROCEDURE, appId, normalizedRegion);
 
         try (Connection connection = getConnection();
              CallableStatement statement = connection.prepareCall(callSql)) {
