@@ -5,8 +5,14 @@ DROP PROCEDURE IF EXISTS sp_get_surveillance_model_config;
 DROP PROCEDURE IF EXISTS sp_get_surveillance_model_threshold;
 DROP PROCEDURE IF EXISTS sp_get_ficc_trades;
 DROP PROCEDURE IF EXISTS sp_claim_next_surveillance_run_request;
+DROP PROCEDURE IF EXISTS sp_insert_surveillance_run_request;
+DROP PROCEDURE IF EXISTS sp_find_latest_surveillance_run_request;
+DROP PROCEDURE IF EXISTS sp_find_surveillance_run_requests;
 DROP PROCEDURE IF EXISTS sp_mark_surveillance_run_request_completed;
 DROP PROCEDURE IF EXISTS sp_mark_surveillance_run_request_failed;
+DROP PROCEDURE IF EXISTS sp_insert_ficc_wash_alert_history;
+DROP PROCEDURE IF EXISTS sp_insert_ficc_wash_alert_history_trade;
+DROP PROCEDURE IF EXISTS sp_find_ficc_wash_alert_history;
 DROP TABLE IF EXISTS ficc_wash_alert_history_trade;
 DROP TABLE IF EXISTS ficc_wash_alert_history;
 DROP TABLE IF EXISTS surveillance_run_request;
@@ -163,7 +169,17 @@ INSERT INTO surveillance_run_request (
 (1, 'NAMR', '2026-06-05', 'portfolio-seed'),
 (1, 'NAMR', '2026-06-06', 'portfolio-seed'),
 (1, 'NAMR', '2026-06-07', 'portfolio-seed'),
-(1, 'NAMR', '2026-06-08', 'portfolio-seed');
+(1, 'NAMR', '2026-06-08', 'portfolio-seed'),
+(2, 'EMEA', '2026-06-04', 'portfolio-seed'),
+(2, 'EMEA', '2026-06-05', 'portfolio-seed'),
+(2, 'EMEA', '2026-06-06', 'portfolio-seed'),
+(2, 'EMEA', '2026-06-07', 'portfolio-seed'),
+(2, 'EMEA', '2026-06-08', 'portfolio-seed'),
+(3, 'APAC', '2026-06-04', 'portfolio-seed'),
+(3, 'APAC', '2026-06-05', 'portfolio-seed'),
+(3, 'APAC', '2026-06-06', 'portfolio-seed'),
+(3, 'APAC', '2026-06-07', 'portfolio-seed'),
+(3, 'APAC', '2026-06-08', 'portfolio-seed');
 
 INSERT INTO surveillance_model_threshold (
     appid,
@@ -342,6 +358,77 @@ BEGIN
     WHERE request_id = v_request_id;
 END//
 
+CREATE PROCEDURE sp_insert_surveillance_run_request(
+    IN p_appid INT,
+    IN p_region VARCHAR(10),
+    IN p_business_date DATE,
+    IN p_requested_by VARCHAR(80)
+)
+BEGIN
+    INSERT INTO surveillance_run_request (
+        appid,
+        region,
+        business_date,
+        requested_by
+    ) VALUES (
+        p_appid,
+        UPPER(p_region),
+        p_business_date,
+        COALESCE(NULLIF(TRIM(p_requested_by), ''), 'FRONTEND_USER')
+    );
+
+    SELECT LAST_INSERT_ID() AS request_id;
+END//
+
+CREATE PROCEDURE sp_find_latest_surveillance_run_request(
+    IN p_appid INT,
+    IN p_region VARCHAR(10),
+    IN p_business_date DATE
+)
+BEGIN
+    SELECT
+        request_id,
+        appid,
+        region,
+        business_date,
+        status,
+        alerts_generated,
+        requested_at,
+        started_at,
+        completed_at,
+        error_message
+    FROM surveillance_run_request
+    WHERE appid = p_appid
+      AND region = UPPER(p_region)
+      AND business_date = p_business_date
+    ORDER BY requested_at DESC, request_id DESC
+    LIMIT 1;
+END//
+
+CREATE PROCEDURE sp_find_surveillance_run_requests(
+    IN p_appid INT,
+    IN p_region VARCHAR(10),
+    IN p_business_date DATE
+)
+BEGIN
+    SELECT
+        request_id,
+        appid,
+        region,
+        business_date,
+        status,
+        alerts_generated,
+        requested_at,
+        started_at,
+        completed_at,
+        error_message
+    FROM surveillance_run_request
+    WHERE appid = p_appid
+      AND region = UPPER(p_region)
+      AND business_date = p_business_date
+    ORDER BY requested_at DESC, request_id DESC;
+END//
+
 CREATE PROCEDURE sp_mark_surveillance_run_request_completed(
     IN p_request_id BIGINT,
     IN p_alerts_generated INT
@@ -365,6 +452,154 @@ BEGIN
         completed_at = CURRENT_TIMESTAMP,
         error_message = p_error_message
     WHERE request_id = p_request_id;
+END//
+
+CREATE PROCEDURE sp_insert_ficc_wash_alert_history(
+    IN p_alert_fingerprint CHAR(64),
+    IN p_alert_id VARCHAR(80),
+    IN p_appid INT,
+    IN p_modelid INT,
+    IN p_region VARCHAR(10),
+    IN p_alert_type VARCHAR(80),
+    IN p_match_type VARCHAR(80),
+    IN p_business_date DATE,
+    IN p_first_trade_date DATE,
+    IN p_last_trade_date DATE,
+    IN p_related_trade_ids VARCHAR(1000),
+    IN p_alert_payload LONGTEXT,
+    IN p_dispatch_status VARCHAR(30)
+)
+BEGIN
+    INSERT INTO ficc_wash_alert_history (
+        alert_fingerprint,
+        alert_id,
+        appid,
+        modelid,
+        region,
+        alert_type,
+        match_type,
+        business_date,
+        first_trade_date,
+        last_trade_date,
+        related_trade_ids,
+        alert_payload,
+        dispatch_status
+    ) VALUES (
+        p_alert_fingerprint,
+        p_alert_id,
+        p_appid,
+        p_modelid,
+        UPPER(p_region),
+        p_alert_type,
+        p_match_type,
+        p_business_date,
+        p_first_trade_date,
+        p_last_trade_date,
+        p_related_trade_ids,
+        p_alert_payload,
+        p_dispatch_status
+    );
+
+    SELECT LAST_INSERT_ID() AS alert_history_id;
+END//
+
+CREATE PROCEDURE sp_insert_ficc_wash_alert_history_trade(
+    IN p_alert_history_id BIGINT,
+    IN p_trade_sequence INT,
+    IN p_trade_id VARCHAR(50),
+    IN p_trade_date DATE,
+    IN p_trade_timestamp DATETIME,
+    IN p_asset_class VARCHAR(50),
+    IN p_instrument_id VARCHAR(80),
+    IN p_maturity DATE,
+    IN p_currency CHAR(3),
+    IN p_side VARCHAR(4),
+    IN p_quantity DECIMAL(22, 6),
+    IN p_price DECIMAL(22, 8),
+    IN p_total_amount DECIMAL(30, 8),
+    IN p_counterparty_id VARCHAR(80),
+    IN p_account_id VARCHAR(80),
+    IN p_beneficial_owner VARCHAR(120),
+    IN p_trader_id VARCHAR(80),
+    IN p_desk VARCHAR(80),
+    IN p_book VARCHAR(80),
+    IN p_broker VARCHAR(80),
+    IN p_trade_role VARCHAR(30)
+)
+BEGIN
+    INSERT INTO ficc_wash_alert_history_trade (
+        alert_history_id,
+        trade_sequence,
+        trade_id,
+        trade_date,
+        trade_timestamp,
+        asset_class,
+        instrument_id,
+        maturity,
+        currency,
+        side,
+        quantity,
+        price,
+        total_amount,
+        counterparty_id,
+        account_id,
+        beneficial_owner,
+        trader_id,
+        desk,
+        book,
+        broker,
+        trade_role
+    ) VALUES (
+        p_alert_history_id,
+        p_trade_sequence,
+        p_trade_id,
+        p_trade_date,
+        p_trade_timestamp,
+        p_asset_class,
+        p_instrument_id,
+        p_maturity,
+        p_currency,
+        p_side,
+        p_quantity,
+        p_price,
+        p_total_amount,
+        p_counterparty_id,
+        p_account_id,
+        p_beneficial_owner,
+        p_trader_id,
+        p_desk,
+        p_book,
+        p_broker,
+        p_trade_role
+    );
+END//
+
+CREATE PROCEDURE sp_find_ficc_wash_alert_history(
+    IN p_appid INT,
+    IN p_region VARCHAR(10),
+    IN p_business_date DATE
+)
+BEGIN
+    SELECT
+        alert_history_id,
+        alert_id,
+        appid,
+        modelid,
+        region,
+        alert_type,
+        match_type,
+        business_date,
+        first_trade_date,
+        last_trade_date,
+        related_trade_ids,
+        alert_payload,
+        dispatch_status,
+        created_at
+    FROM ficc_wash_alert_history
+    WHERE appid = p_appid
+      AND region = UPPER(p_region)
+      AND business_date = p_business_date
+    ORDER BY alert_history_id;
 END//
 
 CREATE PROCEDURE sp_get_surveillance_model_threshold(

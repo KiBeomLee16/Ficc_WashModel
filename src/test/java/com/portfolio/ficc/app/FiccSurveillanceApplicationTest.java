@@ -29,7 +29,9 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -147,6 +149,34 @@ class FiccSurveillanceApplicationTest {
         assertEquals(0, summary.alertsDispatched());
         assertEquals(1, summary.duplicateAlerts());
         verify(model).dispatchAlert(modelConfig, businessDate, alert, alertPayload);
+    }
+
+    @Test
+    void runReturnsZeroAlertSummaryAndDoesNotDispatchWhenNoAlerts() {
+        ModelConfig modelConfig = modelConfig("FICC_WASH_TRADE");
+        LocalDate businessDate = LocalDate.of(2026, 6, 8);
+        List<Trade> trades = List.of(trade("T-RUN-001", Side.BUY));
+
+        when(modelRegistry.getModel(modelConfig.modelClassName())).thenReturn(model);
+        when(model.modelCode()).thenReturn("FICC_WASH_TRADE");
+        when(model.getTrades(modelConfig, "NAMR", businessDate)).thenReturn(trades);
+        when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of());
+
+        PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
+
+        RunSummary summary = application.run(1, "NAMR", businessDate);
+
+        assertEquals(1, summary.tradesProcessed());
+        assertEquals(0, summary.alertsGenerated());
+        assertEquals(0, summary.alertsDispatched());
+        assertEquals(0, summary.duplicateAlerts());
+        verify(model, never()).generateJson(any(Alert.class));
+        verify(model, never()).dispatchAlert(
+                any(ModelConfig.class),
+                any(LocalDate.class),
+                any(Alert.class),
+                any(String.class)
+        );
     }
 
     @Test

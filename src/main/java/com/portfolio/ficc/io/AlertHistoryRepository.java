@@ -1,6 +1,7 @@
 package com.portfolio.ficc.io;
 
 import com.portfolio.ficc.model.Alert;
+import com.portfolio.ficc.model.AlertHistoryResult;
 import com.portfolio.ficc.model.ModelConfig;
 import com.portfolio.ficc.model.Trade;
 import org.slf4j.Logger;
@@ -10,15 +11,15 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.Date;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -29,49 +30,9 @@ public class AlertHistoryRepository {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AlertHistoryRepository.class);
 
-    private static final String INSERT_ALERT_HISTORY_SQL = """
-            INSERT INTO ficc_wash_alert_history (
-                alert_fingerprint,
-                alert_id,
-                appid,
-                modelid,
-                region,
-                alert_type,
-                match_type,
-                business_date,
-                first_trade_date,
-                last_trade_date,
-                related_trade_ids,
-                alert_payload,
-                dispatch_status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """;
-
-    private static final String INSERT_ALERT_HISTORY_TRADE_SQL = """
-            INSERT INTO ficc_wash_alert_history_trade (
-                alert_history_id,
-                trade_sequence,
-                trade_id,
-                trade_date,
-                trade_timestamp,
-                asset_class,
-                instrument_id,
-                maturity,
-                currency,
-                side,
-                quantity,
-                price,
-                total_amount,
-                counterparty_id,
-                account_id,
-                beneficial_owner,
-                trader_id,
-                desk,
-                book,
-                broker,
-                trade_role
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """;
+    private static final String INSERT_ALERT_HISTORY_CALL = "{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
+    private static final String INSERT_ALERT_HISTORY_TRADE_CALL = "{CALL sp_insert_ficc_wash_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
+    private static final String FIND_ALERT_HISTORY_CALL = "{CALL sp_find_ficc_wash_alert_history(?, ?, ?)}";
 
     private final DatabaseConfig databaseConfig;
 
@@ -141,6 +102,29 @@ public class AlertHistoryRepository {
         }
     }
 
+    public List<AlertHistoryResult> findByRunCriteria(int appId, String region, LocalDate businessDate) {
+        Objects.requireNonNull(region, "region is required");
+        Objects.requireNonNull(businessDate, "businessDate is required");
+
+        try (Connection connection = getConnection();
+             CallableStatement statement = connection.prepareCall(FIND_ALERT_HISTORY_CALL)) {
+            statement.setInt(1, appId);
+            statement.setString(2, region.trim().toUpperCase());
+            statement.setDate(3, Date.valueOf(businessDate));
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<AlertHistoryResult> results = new ArrayList<>();
+                while (resultSet.next()) {
+                    results.add(toAlertHistoryResult(resultSet));
+                }
+                return results;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to search alert history for appid="
+                    + appId + ", region=" + region + ", businessDate=" + businessDate, exception);
+        }
+    }
+
     protected Connection getConnection() throws SQLException {
         return databaseConfig.getConnection();
     }
@@ -166,10 +150,7 @@ public class AlertHistoryRepository {
             LocalDate firstTradeDate,
             LocalDate lastTradeDate
     ) throws SQLException, DuplicateAlertHistoryException {
-        try (PreparedStatement statement = connection.prepareStatement(
-                INSERT_ALERT_HISTORY_SQL,
-                Statement.RETURN_GENERATED_KEYS
-        )) {
+        try (CallableStatement statement = connection.prepareCall(INSERT_ALERT_HISTORY_CALL)) {
             statement.setString(1, alertFingerprint);
             statement.setString(2, alert.alertId());
             statement.setInt(3, modelConfig.appId());
@@ -184,10 +165,9 @@ public class AlertHistoryRepository {
             statement.setString(12, alertPayload);
             statement.setString(13, "DISPATCHED");
 
-            statement.executeUpdate();
-            try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
-                if (generatedKeys.next()) {
-                    return generatedKeys.getLong(1);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return resultSet.getLong("alert_history_id");
                 }
             }
             throw new SQLException("Alert history insert did not return generated alert_history_id");
@@ -203,7 +183,7 @@ public class AlertHistoryRepository {
 
     private void insertAlertHistoryTrades(Connection connection, long alertHistoryId, Alert alert) throws SQLException {
         List<Trade> relatedTrades = sortedRelatedTrades(alert);
-        try (PreparedStatement statement = connection.prepareStatement(INSERT_ALERT_HISTORY_TRADE_SQL)) {
+        try (CallableStatement statement = connection.prepareCall(INSERT_ALERT_HISTORY_TRADE_CALL)) {
             int sequence = 1;
             for (Trade trade : relatedTrades) {
                 statement.setLong(1, alertHistoryId);
@@ -227,10 +207,29 @@ public class AlertHistoryRepository {
                 statement.setString(19, trade.book());
                 statement.setString(20, trade.broker());
                 statement.setString(21, trade.side().name() + "_LEG");
-                statement.addBatch();
+                statement.executeUpdate();
             }
-            statement.executeBatch();
         }
+    }
+
+    private AlertHistoryResult toAlertHistoryResult(ResultSet resultSet) throws SQLException {
+        Timestamp createdAt = resultSet.getTimestamp("created_at");
+        return new AlertHistoryResult(
+                resultSet.getLong("alert_history_id"),
+                resultSet.getString("alert_id"),
+                resultSet.getInt("appid"),
+                resultSet.getInt("modelid"),
+                resultSet.getString("region"),
+                resultSet.getString("alert_type"),
+                resultSet.getString("match_type"),
+                resultSet.getDate("business_date").toLocalDate(),
+                resultSet.getDate("first_trade_date").toLocalDate(),
+                resultSet.getDate("last_trade_date").toLocalDate(),
+                resultSet.getString("related_trade_ids"),
+                resultSet.getString("alert_payload"),
+                resultSet.getString("dispatch_status"),
+                createdAt == null ? null : createdAt.toLocalDateTime()
+        );
     }
 
     private String relatedTradeIds(Alert alert) {

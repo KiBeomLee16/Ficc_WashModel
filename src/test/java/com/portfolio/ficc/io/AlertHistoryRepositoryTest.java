@@ -1,6 +1,7 @@
 package com.portfolio.ficc.io;
 
 import com.portfolio.ficc.model.Alert;
+import com.portfolio.ficc.model.AlertHistoryResult;
 import com.portfolio.ficc.model.ModelConfig;
 import com.portfolio.ficc.model.Side;
 import com.portfolio.ficc.model.Trade;
@@ -11,13 +12,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.Date;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
-import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -27,7 +27,6 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -51,13 +50,19 @@ class AlertHistoryRepositoryTest {
     private Connection connection;
 
     @Mock
-    private PreparedStatement historyStatement;
+    private CallableStatement historyStatement;
 
     @Mock
-    private PreparedStatement detailStatement;
+    private CallableStatement detailStatement;
+
+    @Mock
+    private CallableStatement searchStatement;
 
     @Mock
     private ResultSet generatedKeys;
+
+    @Mock
+    private ResultSet searchResultSet;
 
     @Test
     void saveIfNewPersistsAlertHistoryAndDrillOutRowsAndReturnsTrue() throws Exception {
@@ -66,17 +71,14 @@ class AlertHistoryRepositoryTest {
         String alertPayload = "{\"alertId\":\"ficc_wash_alert_1\"}";
 
         when(connection.getAutoCommit()).thenReturn(true);
-        when(connection.prepareStatement(
-                contains("INSERT INTO ficc_wash_alert_history ("),
-                eq(Statement.RETURN_GENERATED_KEYS)
-        )).thenReturn(historyStatement);
-        when(historyStatement.executeUpdate()).thenReturn(1);
-        when(historyStatement.getGeneratedKeys()).thenReturn(generatedKeys);
+        when(connection.prepareCall("{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
+                .thenReturn(historyStatement);
+        when(historyStatement.executeQuery()).thenReturn(generatedKeys);
         when(generatedKeys.next()).thenReturn(true);
-        when(generatedKeys.getLong(1)).thenReturn(42L);
-        when(connection.prepareStatement(contains("INSERT INTO ficc_wash_alert_history_trade")))
+        when(generatedKeys.getLong("alert_history_id")).thenReturn(42L);
+        when(connection.prepareCall("{CALL sp_insert_ficc_wash_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
                 .thenReturn(detailStatement);
-        when(detailStatement.executeBatch()).thenReturn(new int[]{1, 1});
+        when(detailStatement.executeUpdate()).thenReturn(1);
 
         AlertHistoryRepository repository = new ConnectionBackedAlertHistoryRepository(connection);
 
@@ -99,7 +101,7 @@ class AlertHistoryRepositoryTest {
         verify(historyStatement).setString(11, "T-CUM-BUY-1,T-CUM-SELL-1");
         verify(historyStatement).setString(12, alertPayload);
         verify(historyStatement).setString(13, "DISPATCHED");
-        verify(historyStatement).executeUpdate();
+        verify(historyStatement).executeQuery();
 
         ArgumentCaptor<Integer> sequenceCaptor = ArgumentCaptor.forClass(Integer.class);
         ArgumentCaptor<String> tradeIdCaptor = ArgumentCaptor.forClass(String.class);
@@ -112,8 +114,7 @@ class AlertHistoryRepositoryTest {
         verify(detailStatement, times(2)).setDate(eq(4), tradeDateCaptor.capture());
         verify(detailStatement, times(2)).setTimestamp(eq(5), timestampCaptor.capture());
         verify(detailStatement, times(2)).setString(eq(21), roleCaptor.capture());
-        verify(detailStatement, times(2)).addBatch();
-        verify(detailStatement).executeBatch();
+        verify(detailStatement, times(2)).executeUpdate();
         verify(connection).commit();
         verify(connection).setAutoCommit(false);
         verify(connection).setAutoCommit(true);
@@ -136,11 +137,9 @@ class AlertHistoryRepositoryTest {
         String alertPayload = "{\"alertId\":\"ficc_wash_alert_1\"}";
 
         when(connection.getAutoCommit()).thenReturn(true);
-        when(connection.prepareStatement(
-                contains("INSERT INTO ficc_wash_alert_history ("),
-                eq(Statement.RETURN_GENERATED_KEYS)
-        )).thenReturn(historyStatement);
-        when(historyStatement.executeUpdate()).thenThrow(new SQLIntegrityConstraintViolationException("duplicate"));
+        when(connection.prepareCall("{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
+                .thenReturn(historyStatement);
+        when(historyStatement.executeQuery()).thenThrow(new SQLIntegrityConstraintViolationException("duplicate"));
 
         AlertHistoryRepository repository = new ConnectionBackedAlertHistoryRepository(connection);
 
@@ -149,7 +148,50 @@ class AlertHistoryRepositoryTest {
         assertFalse(saved);
         verify(connection).rollback();
         verify(connection, never()).commit();
-        verify(connection, never()).prepareStatement(contains("INSERT INTO ficc_wash_alert_history_trade"));
+        verify(connection, never()).prepareCall("{CALL sp_insert_ficc_wash_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}");
+    }
+
+    @Test
+    void findByRunCriteriaReturnsAlertHistoryRowsForSelectedAppRegionAndDate() throws Exception {
+        LocalDate businessDate = LocalDate.of(2026, 6, 8);
+        when(connection.prepareCall("{CALL sp_find_ficc_wash_alert_history(?, ?, ?)}"))
+                .thenReturn(searchStatement);
+        when(searchStatement.executeQuery()).thenReturn(searchResultSet);
+        when(searchResultSet.next()).thenReturn(true).thenReturn(false);
+        when(searchResultSet.getLong("alert_history_id")).thenReturn(11L);
+        when(searchResultSet.getString("alert_id")).thenReturn("ficc_wash_alert_11");
+        when(searchResultSet.getInt("appid")).thenReturn(3);
+        when(searchResultSet.getInt("modelid")).thenReturn(1);
+        when(searchResultSet.getString("region")).thenReturn("APAC");
+        when(searchResultSet.getString("alert_type")).thenReturn("FICC_WASH_TRADE");
+        when(searchResultSet.getString("match_type")).thenReturn("ONE_TIME_TRANSACTION");
+        when(searchResultSet.getDate("business_date")).thenReturn(Date.valueOf(businessDate));
+        when(searchResultSet.getDate("first_trade_date")).thenReturn(Date.valueOf(businessDate));
+        when(searchResultSet.getDate("last_trade_date")).thenReturn(Date.valueOf(businessDate));
+        when(searchResultSet.getString("related_trade_ids")).thenReturn("T-UST-001,T-UST-002");
+        when(searchResultSet.getString("alert_payload")).thenReturn("{\"reasons\":[\"same counterparty\"]}");
+        when(searchResultSet.getString("dispatch_status")).thenReturn("DISPATCHED");
+        when(searchResultSet.getTimestamp("created_at")).thenReturn(Timestamp.valueOf("2026-06-08 09:45:00"));
+
+        AlertHistoryRepository repository = new ConnectionBackedAlertHistoryRepository(connection);
+
+        List<AlertHistoryResult> results = repository.findByRunCriteria(
+                3,
+                "apac",
+                businessDate
+        );
+
+        assertEquals(1, results.size());
+        assertEquals(11L, results.get(0).alertHistoryId());
+        assertEquals("ficc_wash_alert_11", results.get(0).alertId());
+        assertEquals(3, results.get(0).appId());
+        assertEquals("APAC", results.get(0).region());
+        assertEquals("ONE_TIME_TRANSACTION", results.get(0).matchType());
+        assertEquals("T-UST-001,T-UST-002", results.get(0).relatedTradeIds());
+
+        verify(searchStatement).setInt(1, 3);
+        verify(searchStatement).setString(2, "APAC");
+        verify(searchStatement).setDate(3, Date.valueOf(businessDate));
     }
 
     private static Alert cumulativeAlert() {

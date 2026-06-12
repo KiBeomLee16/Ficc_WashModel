@@ -53,6 +53,7 @@ public class FiccSurveillanceApplication {
         List<Trade> trades = model.getTrades(modelConfig, region, businessDate);
         LOGGER.info("Loaded {} trades: region={}, businessDate={}.",
                 trades.size(),  modelConfig.region(), businessDate);
+
         List<Alert> alerts = model.evaluate(modelConfig, trades, businessDate);
         LOGGER.info("------------------------------------------------------------------------------------------");
         LOGGER.info("Evaluated surveillance model and generated {} alerts : region={}, businessDate={}.",

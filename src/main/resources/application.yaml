@@ -4,6 +4,12 @@ ficc:
     user: root
     password: root
 
+surveillance:
+  worker:
+    enabled: true
+    initial-delay-ms: 3000
+    fixed-delay-ms: 5000
+
 logging:
   file:
     name: logs/ficc-wash-surveillance.log

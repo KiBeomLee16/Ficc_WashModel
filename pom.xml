@@ -16,7 +16,7 @@
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>FICC Wash Trade Surveillance Model</name>
+    <name>Trade Surveillance Model</name>
     <description>Rule-based Java surveillance engine for potential FICC wash trades.</description>
 
     <properties>
@@ -30,6 +30,10 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         <dependency>
             <groupId>com.mysql</groupId>

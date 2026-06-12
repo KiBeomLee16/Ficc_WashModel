@@ -87,7 +87,7 @@ class FiccWashTradeModelTest {
         assertEquals(4, alert.relatedTrades().size());
         assertTrue(alert.reasons().stream().anyMatch(reason -> reason.contains("Cumulative Match Rule")));
         assertTrue(alert.reasons().stream().anyMatch(reason ->
-                reason.contains("Lookup Period Rule: cumulative evaluation used trades from 2026-06-06 through 2026-06-08")));
+                reason.contains("Lookup Period Rule matched")));
     }
 
     @Test

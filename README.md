@@ -1,4 +1,4 @@
-# FICC Wash Trade Surveillance Model
+# Trade Surveillance Model
 
 Java 17 Spring Boot portfolio project for a rule-based FICC wash trade surveillance model.
 
@@ -6,7 +6,7 @@ FICC means Fixed Income, Currencies, and Commodities. The application can run fr
 
 ## Key Features
 
-- Spring Boot queue worker that processes `PENDING` and `FAILED` surveillance run requests from MySQL.
+- Spring Boot scheduled queue worker that scans MySQL and processes `PENDING` and `FAILED` surveillance run requests.
 - Database-driven model lookup using `appid`, `region`, and `model_class_name`.
 - Stored procedure based trade ingestion through `sp_get_ficc_trades`.
 - Rule-based FICC wash trade detection with no machine learning dependency.
@@ -16,16 +16,23 @@ FICC means Fixed Income, Currencies, and Commodities. The application can run fr
 - Duplicate alert prevention through alert fingerprints in `ficc_wash_alert_history`.
 - Drill-out trade storage in `ficc_wash_alert_history_trade` for investigation and interview demos.
 - Daily rolling application logs under the local `logs` directory.
+- Lightweight React frontend for registering local run requests and searching alert history through REST APIs.
 
 ## Design Shape
 
-The Spring Boot entry point is intentionally thin:
+The Spring Boot entry point is intentionally thin and only boots the application plus scheduling:
 
 ```text
 com.portfolio.ficc.FiccWashModelApplication
 ```
 
-It delegates startup arguments to a request worker:
+Scheduled polling is handled by:
+
+```text
+com.portfolio.ficc.app.FiccRunRequestScheduler
+```
+
+The scheduler delegates claimed queue work to:
 
 ```text
 com.portfolio.ficc.app.FiccRunRequestWorker
@@ -50,29 +57,32 @@ Runtime flow:
 
 ```mermaid
 flowchart TD
-    A["Run Request<br/>PENDING / FAILED"] --> B["Load Model Config<br/>appid + region"]
-    B --> C["Select Model<br/>(FiccWashTradeModel)"]
-    C --> D["getTrades()"]
-    D --> E["evaluate()"]
+    A["Frontend or SQL"] --> B["Register Run Request<br/>status = PENDING"]
+    B --> C["Scheduled Worker<br/>scan DB queue"]
+    C --> D["Claim Request<br/>PENDING / FAILED -> RUNNING"]
+    D --> E["Load Model Config<br/>appid + region"]
+    E --> F["Select Model<br/>(FiccWashTradeModel)"]
+    F --> G["getTrades()"]
+    G --> H["evaluate()"]
 
-    E --> F["One-time Test"]
-    E --> G["Cumulative Test"]
+    H --> I["One-time Test"]
+    H --> J["Cumulative Test"]
 
-    F --> H["Create Alert<br/>generateAlertId()"]
-    G --> H
+    I --> K["Create Alert<br/>generateAlertId()"]
+    J --> K
 
-    H --> I["generateJson(alert)"]
-    I --> J["dispatchAlert(payload)"]
-    J --> K["Duplicate Check<br/>saveIfNew()"]
+    K --> L["generateJson(alert)"]
+    L --> M["Duplicate Check"]
+    M --> N["dispatchAlert(payload)<br/>saveIfNew()"]
 
-    K --> L["Save Alert History"]
-    L --> M["Save Drill-out Trades"]
-    M --> N["Mark Request COMPLETED"]
+    N --> O["Save Alert History"]
+    O --> P["Save Drill-out Trades"]
+    P --> Q["Mark Request COMPLETED"]
 
-    K --> O["Skip Duplicate"]
-    O --> N
+    M --> R["Skip Duplicate"]
+    R --> Q
 
-    A --> P["Mark Request FAILED<br/>on exception"]
+    D --> S["Mark Request FAILED<br/>on exception"]
 ```
 
 ## Five-Method Pipeline
@@ -206,6 +216,12 @@ ficc:
     user: root
     password: root
 
+surveillance:
+  worker:
+    enabled: true
+    initial-delay-ms: 3000
+    fixed-delay-ms: 5000
+
 logging:
   file:
     name: logs/ficc-wash-surveillance.log
@@ -254,13 +270,31 @@ Build and run:
 java -jar target\ficc-wash-trade-surveillance-1.0.0.jar
 ```
 
-Startup always reads `PENDING` and `FAILED` rows from `surveillance_run_request`, queues the claimed requests in the worker, and processes them. The seed SQL inserts five pending NAMR requests for `2026-06-04` through `2026-06-08`.
+After startup, the scheduled worker scans `surveillance_run_request` every five seconds by default, claims `PENDING` and `FAILED` rows, and processes them. The seed SQL inserts five pending NAMR requests for `2026-06-04` through `2026-06-08`.
 
 Run as Spring Boot queue worker:
 
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
+
+Run the React request console in a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+The React development server proxies `/run-request` to Spring Boot on `http://localhost:8080`. The browser submits `appid`, `region`, `businessDate`, and `requestedBy`; Java inserts a `PENDING` row into `surveillance_run_request` and immediately returns the new request ID. The scheduled worker later claims and runs the request from the database queue.
+
+The same frontend uses `GET /alert-history` for the Result Window. Search results are read from `ficc_wash_alert_history` by `appid`, `region`, and `businessDate`; they are not hard-coded in React.
 
 ## Local MySQL Demo Steps
 
@@ -286,10 +320,10 @@ ORDER BY request_id;
 .\mvnw.cmd spring-boot:run
 ```
 
-4. Confirm the queue moved to `COMPLETED` or `FAILED`:
+4. Wait for the scheduled worker to scan the queue, then confirm the request moved to `COMPLETED` or `FAILED`:
 
 ```sql
-SELECT request_id, appid, region, business_date, status, generated_alert_count, started_at, completed_at, error_message
+SELECT request_id, appid, region, business_date, status, alerts_generated, started_at, completed_at, error_message
 FROM surveillance_run_request
 ORDER BY request_id DESC;
 ```
@@ -317,7 +351,7 @@ INSERT INTO surveillance_run_request (appid, region, business_date, requested_by
 VALUES (1, 'NAMR', '2026-06-08', 'local-demo');
 ```
 
-8. Run the application again and compare alert counts with history records. If a cumulative alert uses the same related trade set as a previous run, the duplicate fingerprint prevents another dispatch.
+8. Wait for the next scheduled worker scan and compare alert counts with history records. If a cumulative alert uses the same related trade set as a previous run, the duplicate fingerprint prevents another dispatch.
 
 Run unit tests:
 
@@ -415,6 +449,7 @@ The real JSON also includes full `tradeA` and `tradeB` objects for each alert.
 com.portfolio.ficc
   FiccWashModelApplication.java
   app
+    FiccRunRequestScheduler.java
     FiccRunRequestWorker.java
     FiccSurveillanceApplication.java
   surveillance
@@ -423,6 +458,7 @@ com.portfolio.ficc
     SurveillanceModelRegistry.java
   model
     Alert.java
+    AlertHistoryResult.java
     ModelConfig.java
     RunRequest.java
     RunSummary.java
@@ -434,12 +470,15 @@ com.portfolio.ficc
     DatabaseConfig.java
     RunRequestRepository.java
     TradeCsvReader.java
+  web
+    AlertHistoryController.java
+    RunRequestController.java
 ```
 
 ## Future Enhancements
 
 - Add reviewer decisions and case workflow on top of the existing MySQL alert history.
-- Add a REST API for triggering surveillance runs by region and date.
+- Add REST APIs for searching run request status and alert-history drill-out trade rows.
 - Dispatch alerts to Kafka for downstream case management.
 - Move rule weights to JSON, YAML, or database-backed configuration.
 - Add account hierarchy and related-party matching.

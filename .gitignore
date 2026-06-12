@@ -4,6 +4,21 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+### Runtime logs ###
+logs/
+*.log
+*.log.gz
+
+### Local environment overrides ###
+.env
+.env.*
+!.env.example
+*.local
+application-local.yaml
+application-*.local.yaml
+src/main/resources/application-local.yaml
+src/main/resources/application-*.local.yaml
+
 ### STS ###
 .apt_generated
 .classpath

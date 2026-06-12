@@ -1,13 +1,10 @@
 package com.portfolio.ficc;
 
-import com.portfolio.ficc.app.FiccRunRequestWorker;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.springframework.boot.SpringApplication;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
-import static org.mockito.Mockito.verify;
 
 class FiccWashModelApplicationTest {
 
@@ -20,16 +17,5 @@ class FiccWashModelApplicationTest {
 
             springApplication.verify(() -> SpringApplication.run(FiccWashModelApplication.class, args));
         }
-    }
-
-    @Test
-    void commandLineRunnerStartsRunRequestWorkerWithoutUsingArgs() {
-        FiccRunRequestWorker runRequestWorker = mock(FiccRunRequestWorker.class);
-        FiccWashModelApplication application = new FiccWashModelApplication(runRequestWorker);
-        String[] args = {"ignored"};
-
-        application.run(args);
-
-        verify(runRequestWorker).run();
     }
 }

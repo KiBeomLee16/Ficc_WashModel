@@ -159,24 +159,14 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
     private Alert createOneTimeAlert(ModelConfig modelConfig, Trade tradeA, Trade tradeB, WashTradeThresholds thresholds) {
         Trade buyTrade = buyTrade(tradeA, tradeB);
         Trade sellTrade = sellTrade(tradeA, tradeB);
-        BigDecimal quantityDifference = percentDifference(buyTrade.quantity(), sellTrade.quantity());
-        BigDecimal amountDifference = percentDifference(buyTrade.totalAmount(), sellTrade.totalAmount());
-        BigDecimal matchedAmount = minimum(buyTrade.totalAmount(), sellTrade.totalAmount());
 
         List<String> reasons = new ArrayList<>();
-        reasons.add("Same Instrument Rule: assetClass, instrumentId, maturity, and currency match.");
-        reasons.add("Opposite Side Rule: " + buyTrade.tradeId() + " is BUY and " + sellTrade.tradeId() + " is SELL.");
-        reasons.add("Same Counterparty Rule: both trades have counterpartyId " + buyTrade.counterpartyId() + ".");
-        reasons.add("Quantity Tolerance Rule: buy quantity " + buyTrade.quantity().toPlainString()
-                + " and sell quantity " + sellTrade.quantity().toPlainString()
-                + " differ by " + formatPercent(quantityDifference)
-                + ", within threshold " + formatPercent(thresholds.quantityTolerancePercent()) + ".");
-        reasons.add("Total Amount Tolerance Rule: buy amount " + buyTrade.totalAmount().toPlainString()
-                + " and sell amount " + sellTrade.totalAmount().toPlainString()
-                + " differ by " + formatPercent(amountDifference)
-                + ", within threshold " + formatPercent(thresholds.totalAmountTolerancePercent()) + ".");
-        reasons.add("Minimum Amount Rule: matched amount " + matchedAmount.toPlainString()
-                + " meets one-time threshold " + thresholds.oneTimeMinTotalAmount().toPlainString() + ".");
+        reasons.add("Same Instrument Rule matched.");
+        reasons.add("Opposite Side Rule matched.");
+        reasons.add("Same Counterparty Rule matched.");
+        reasons.add("Quantity Tolerance Rule matched.");
+        reasons.add("Total Amount Tolerance Rule matched.");
+        reasons.add("Minimum Amount Rule matched.");
 
         return new Alert(
                 generateAlertId(tradeA, tradeB),
@@ -258,26 +248,13 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
             BigDecimal matchedAmount,
             WashTradeThresholds thresholds
     ) {
-        BigDecimal quantityDifference = percentDifference(totalBuyQuantity, totalSellQuantity);
-        BigDecimal amountDifference = percentDifference(totalBuyAmount, totalSellAmount);
-
         List<String> reasons = new ArrayList<>();
-        reasons.add("Cumulative Match Rule: grouped " + relatedTrades.size()
-                + " trades by assetClass, instrumentId, maturity, currency, and counterpartyId.");
-        reasons.add("Lookup Period Rule: cumulative evaluation used trades from "
-                + thresholds.lookupStartDate() + " through " + thresholds.lookupEndDate()
-                + " based on lookup_days " + thresholds.cumulativeLookupDays() + ".");
-        reasons.add("Same Counterparty Rule: grouped trades have counterpartyId " + buyTrade.counterpartyId() + ".");
-        reasons.add("Cumulative Quantity Rule: total buy quantity " + totalBuyQuantity.toPlainString()
-                + " and total sell quantity " + totalSellQuantity.toPlainString()
-                + " differ by " + formatPercent(quantityDifference)
-                + ", within threshold " + formatPercent(thresholds.quantityTolerancePercent()) + ".");
-        reasons.add("Cumulative Total Amount Rule: total buy amount " + totalBuyAmount.toPlainString()
-                + " and total sell amount " + totalSellAmount.toPlainString()
-                + " differ by " + formatPercent(amountDifference)
-                + ", within threshold " + formatPercent(thresholds.totalAmountTolerancePercent()) + ".");
-        reasons.add("Minimum Amount Rule: cumulative matched amount " + matchedAmount.toPlainString()
-                + " meets cumulative threshold " + thresholds.cumulativeMinTotalAmount().toPlainString() + ".");
+        reasons.add("Cumulative Match Rule matched.");
+        reasons.add("Lookup Period Rule matched.");
+        reasons.add("Same Counterparty Rule matched.");
+        reasons.add("Cumulative Quantity Rule matched.");
+        reasons.add("Cumulative Total Amount Rule matched.");
+        reasons.add("Minimum Amount Rule matched.");
 
         return new Alert(
                 generateAlertId(buyTrade, sellTrade),
@@ -362,10 +339,6 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
         return trades.stream()
                 .sorted(Comparator.comparing(Trade::timestamp).thenComparing(Trade::tradeId))
                 .toList();
-    }
-
-    private String formatPercent(BigDecimal percent) {
-        return percent.stripTrailingZeros().toPlainString() + "%";
     }
 
     private boolean sameText(String left, String right) {

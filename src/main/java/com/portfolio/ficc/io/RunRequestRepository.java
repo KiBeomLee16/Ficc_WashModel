@@ -2,6 +2,7 @@ package com.portfolio.ficc.io;
 
 import com.portfolio.ficc.model.RunRequest;
 import com.portfolio.ficc.model.RunSummary;
+import com.portfolio.ficc.model.RunRequestStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -11,6 +12,10 @@ import java.sql.Connection;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -20,6 +25,9 @@ public class RunRequestRepository {
     private static final Logger LOGGER = LoggerFactory.getLogger(RunRequestRepository.class);
 
     private static final String CLAIM_NEXT_REQUEST_CALL = "{CALL sp_claim_next_surveillance_run_request()}";
+    private static final String INSERT_RUN_REQUEST_CALL = "{CALL sp_insert_surveillance_run_request(?, ?, ?, ?)}";
+    private static final String FIND_LATEST_RUN_REQUEST_CALL = "{CALL sp_find_latest_surveillance_run_request(?, ?, ?)}";
+    private static final String FIND_RUN_REQUESTS_CALL = "{CALL sp_find_surveillance_run_requests(?, ?, ?)}";
     private static final String MARK_COMPLETED_CALL = "{CALL sp_mark_surveillance_run_request_completed(?, ?)}";
     private static final String MARK_FAILED_CALL = "{CALL sp_mark_surveillance_run_request_failed(?, ?)}";
 
@@ -40,6 +48,75 @@ public class RunRequestRepository {
 //                () -> LOGGER.debug("No runnable surveillance run request returned by claim procedure.")
 //        );
         return request;
+    }
+
+    public long insertRunRequest(int appId, String region, LocalDate businessDate, String requestedBy) {
+        Objects.requireNonNull(region, "region is required");
+        Objects.requireNonNull(businessDate, "businessDate is required");
+        Objects.requireNonNull(requestedBy, "requestedBy is required");
+
+        try (Connection connection = getConnection();
+             CallableStatement statement = connection.prepareCall(INSERT_RUN_REQUEST_CALL)) {
+            statement.setInt(1, appId);
+            statement.setString(2, region.trim().toUpperCase());
+            statement.setDate(3, Date.valueOf(businessDate));
+            statement.setString(4, requestedBy.trim().isEmpty() ? "FRONTEND_USER" : requestedBy.trim());
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return resultSet.getLong("request_id");
+                }
+            }
+            throw new SQLException("Run request insert did not return generated request_id");
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to insert run request for appid="
+                    + appId + ", region=" + region + ", businessDate=" + businessDate, exception);
+        }
+    }
+
+    public Optional<RunRequestStatus> findLatestByRunCriteria(int appId, String region, LocalDate businessDate) {
+        Objects.requireNonNull(region, "region is required");
+        Objects.requireNonNull(businessDate, "businessDate is required");
+
+        try (Connection connection = getConnection();
+             CallableStatement statement = connection.prepareCall(FIND_LATEST_RUN_REQUEST_CALL)) {
+            statement.setInt(1, appId);
+            statement.setString(2, region.trim().toUpperCase());
+            statement.setDate(3, Date.valueOf(businessDate));
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return Optional.of(toRunRequestStatus(resultSet));
+                }
+            }
+            return Optional.empty();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to search run request for appid="
+                    + appId + ", region=" + region + ", businessDate=" + businessDate, exception);
+        }
+    }
+
+    public List<RunRequestStatus> findByRunCriteria(int appId, String region, LocalDate businessDate) {
+        Objects.requireNonNull(region, "region is required");
+        Objects.requireNonNull(businessDate, "businessDate is required");
+
+        try (Connection connection = getConnection();
+             CallableStatement statement = connection.prepareCall(FIND_RUN_REQUESTS_CALL)) {
+            statement.setInt(1, appId);
+            statement.setString(2, region.trim().toUpperCase());
+            statement.setDate(3, Date.valueOf(businessDate));
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<RunRequestStatus> results = new ArrayList<>();
+                while (resultSet.next()) {
+                    results.add(toRunRequestStatus(resultSet));
+                }
+                return results;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to search run requests for appid="
+                    + appId + ", region=" + region + ", businessDate=" + businessDate, exception);
+        }
     }
 
     public void markCompleted(RunRequest request, RunSummary summary) {
@@ -131,6 +208,24 @@ public class RunRequestRepository {
                 resultSet.getString("region"),
                 businessDate.toLocalDate(),
                 resultSet.getString("status")
+        );
+    }
+
+    private RunRequestStatus toRunRequestStatus(ResultSet resultSet) throws SQLException {
+        Timestamp requestedAt = resultSet.getTimestamp("requested_at");
+        Timestamp startedAt = resultSet.getTimestamp("started_at");
+        Timestamp completedAt = resultSet.getTimestamp("completed_at");
+        return new RunRequestStatus(
+                resultSet.getLong("request_id"),
+                resultSet.getInt("appid"),
+                resultSet.getString("region"),
+                resultSet.getDate("business_date").toLocalDate(),
+                resultSet.getString("status"),
+                resultSet.getInt("alerts_generated"),
+                requestedAt == null ? null : requestedAt.toLocalDateTime(),
+                startedAt == null ? null : startedAt.toLocalDateTime(),
+                completedAt == null ? null : completedAt.toLocalDateTime(),
+                resultSet.getString("error_message")
         );
     }
 
