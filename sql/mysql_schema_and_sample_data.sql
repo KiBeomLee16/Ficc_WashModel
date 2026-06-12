@@ -13,6 +13,7 @@ DROP PROCEDURE IF EXISTS sp_mark_surveillance_run_request_failed;
 DROP PROCEDURE IF EXISTS sp_insert_ficc_wash_alert_history;
 DROP PROCEDURE IF EXISTS sp_insert_ficc_wash_alert_history_trade;
 DROP PROCEDURE IF EXISTS sp_find_ficc_wash_alert_history;
+DROP PROCEDURE IF EXISTS sp_delete_ficc_wash_alert_history_for_run;
 DROP TABLE IF EXISTS ficc_wash_alert_history_trade;
 DROP TABLE IF EXISTS ficc_wash_alert_history;
 DROP TABLE IF EXISTS surveillance_run_request;
@@ -600,6 +601,40 @@ BEGIN
       AND region = UPPER(p_region)
       AND business_date = p_business_date
     ORDER BY alert_history_id;
+END//
+
+CREATE PROCEDURE sp_delete_ficc_wash_alert_history_for_run(
+    IN p_appid INT,
+    IN p_modelid INT,
+    IN p_region VARCHAR(10),
+    IN p_business_date DATE
+)
+BEGIN
+    DECLARE v_deleted_trade_count INT DEFAULT 0;
+    DECLARE v_deleted_alert_count INT DEFAULT 0;
+
+    DELETE detail
+    FROM ficc_wash_alert_history_trade detail
+    JOIN ficc_wash_alert_history history
+      ON detail.alert_history_id = history.alert_history_id
+    WHERE history.appid = p_appid
+      AND history.modelid = p_modelid
+      AND history.region = UPPER(p_region)
+      AND history.business_date = p_business_date;
+
+    SET v_deleted_trade_count = ROW_COUNT();
+
+    DELETE FROM ficc_wash_alert_history
+    WHERE appid = p_appid
+      AND modelid = p_modelid
+      AND region = UPPER(p_region)
+      AND business_date = p_business_date;
+
+    SET v_deleted_alert_count = ROW_COUNT();
+
+    SELECT
+        v_deleted_alert_count AS deleted_alert_count,
+        v_deleted_trade_count AS deleted_trade_count;
 END//
 
 CREATE PROCEDURE sp_get_surveillance_model_threshold(

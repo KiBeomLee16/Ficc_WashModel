@@ -55,6 +55,20 @@ class AlertDispatcherTest {
         assertEquals("alertPayload is required", exception.getMessage());
     }
 
+    @Test
+    void clearHistoryDeletesExistingRunAlertHistory() {
+        ModelConfig modelConfig = modelConfig();
+        LocalDate businessDate = LocalDate.of(2026, 6, 8);
+        when(alertHistoryRepository.deleteByRunCriteria(modelConfig, businessDate)).thenReturn(2);
+
+        AlertDispatcher dispatcher = new AlertDispatcher(alertHistoryRepository);
+
+        int deletedAlerts = dispatcher.clearHistory(modelConfig, businessDate);
+
+        assertEquals(2, deletedAlerts);
+        verify(alertHistoryRepository).deleteByRunCriteria(modelConfig, businessDate);
+    }
+
     private static ModelConfig modelConfig() {
         return new ModelConfig(
                 1,

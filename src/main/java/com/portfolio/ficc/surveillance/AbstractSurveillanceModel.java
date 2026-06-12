@@ -87,6 +87,10 @@ public abstract class AbstractSurveillanceModel {
         return alertDispatcher.dispatch(modelConfig, businessDate, alert, alertPayload);
     }
 
+    public int clearAlertHistory(ModelConfig modelConfig, LocalDate businessDate) {
+        return alertDispatcher.clearHistory(modelConfig, businessDate);
+    }
+
     protected Connection getConnection() throws SQLException {
         return databaseConfig.getConnection();
     }

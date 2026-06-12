@@ -27,4 +27,11 @@ public class AlertDispatcher {
 
         return alertHistoryRepository.saveIfNew(modelConfig, businessDate, alert, alertPayload);
     }
+
+    public int clearHistory(ModelConfig modelConfig, LocalDate businessDate) {
+        Objects.requireNonNull(modelConfig, "modelConfig is required");
+        Objects.requireNonNull(businessDate, "businessDate is required");
+
+        return alertHistoryRepository.deleteByRunCriteria(modelConfig, businessDate);
+    }
 }

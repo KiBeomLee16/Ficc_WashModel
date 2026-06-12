@@ -59,10 +59,16 @@ class AlertHistoryRepositoryTest {
     private CallableStatement searchStatement;
 
     @Mock
+    private CallableStatement deleteStatement;
+
+    @Mock
     private ResultSet generatedKeys;
 
     @Mock
     private ResultSet searchResultSet;
+
+    @Mock
+    private ResultSet deleteResultSet;
 
     @Test
     void saveIfNewPersistsAlertHistoryAndDrillOutRowsAndReturnsTrue() throws Exception {
@@ -192,6 +198,27 @@ class AlertHistoryRepositoryTest {
         verify(searchStatement).setInt(1, 3);
         verify(searchStatement).setString(2, "APAC");
         verify(searchStatement).setDate(3, Date.valueOf(businessDate));
+    }
+
+    @Test
+    void deleteByRunCriteriaCallsRefreshProcedureAndReturnsDeletedAlertCount() throws Exception {
+        LocalDate businessDate = LocalDate.of(2026, 6, 8);
+        when(connection.prepareCall("{CALL sp_delete_ficc_wash_alert_history_for_run(?, ?, ?, ?)}"))
+                .thenReturn(deleteStatement);
+        when(deleteStatement.executeQuery()).thenReturn(deleteResultSet);
+        when(deleteResultSet.next()).thenReturn(true);
+        when(deleteResultSet.getInt("deleted_alert_count")).thenReturn(2);
+        when(deleteResultSet.getInt("deleted_trade_count")).thenReturn(6);
+
+        AlertHistoryRepository repository = new ConnectionBackedAlertHistoryRepository(connection);
+
+        int deletedAlerts = repository.deleteByRunCriteria(MODEL_CONFIG, businessDate);
+
+        assertEquals(2, deletedAlerts);
+        verify(deleteStatement).setInt(1, 1);
+        verify(deleteStatement).setInt(2, 1);
+        verify(deleteStatement).setString(3, "NAMR");
+        verify(deleteStatement).setDate(4, Date.valueOf(businessDate));
     }
 
     private static Alert cumulativeAlert() {

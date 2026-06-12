@@ -53,8 +53,11 @@ class FiccWashTradeModelTest {
         assertEquals(new BigDecimal("996133740.0000"), alert.totalSellAmount());
         assertEquals(new BigDecimal("100000000"), alert.thresholdAmount());
         assertEquals(2, alert.relatedTrades().size());
-        assertTrue(alert.reasons().stream().anyMatch(reason -> reason.contains("Same Counterparty Rule")));
-        assertTrue(alert.reasons().stream().anyMatch(reason -> reason.contains("Minimum Amount Rule")));
+        assertEquals(List.of(
+                "One-time quantity tolerance: actual difference 0.2%, threshold 5%, within threshold.",
+                "One-time total amount tolerance: actual difference 0.1995%, threshold 5%, within threshold.",
+                "One-time minimum amount: matched amount 996133740.0000, threshold 100000000, above threshold."
+        ), alert.reasons());
     }
 
     @Test
@@ -85,9 +88,11 @@ class FiccWashTradeModelTest {
         assertEquals(new BigDecimal("5445000.00000"), alert.totalSellAmount());
         assertEquals(new BigDecimal("5000000"), alert.thresholdAmount());
         assertEquals(4, alert.relatedTrades().size());
-        assertTrue(alert.reasons().stream().anyMatch(reason -> reason.contains("Cumulative Match Rule")));
-        assertTrue(alert.reasons().stream().anyMatch(reason ->
-                reason.contains("Lookup Period Rule matched")));
+        assertEquals(List.of(
+                "Aggregate quantity tolerance: actual difference 1%, threshold 5%, within threshold.",
+                "Aggregate total amount tolerance: actual difference 1%, threshold 5%, within threshold.",
+                "Aggregate minimum amount: matched amount 5445000.00000, threshold 5000000, above threshold."
+        ), alert.reasons());
     }
 
     @Test

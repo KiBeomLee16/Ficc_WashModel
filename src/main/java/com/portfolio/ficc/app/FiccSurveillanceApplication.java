@@ -58,6 +58,13 @@ public class FiccSurveillanceApplication {
         LOGGER.info("------------------------------------------------------------------------------------------");
         LOGGER.info("Evaluated surveillance model and generated {} alerts : region={}, businessDate={}.",
                 alerts.size(), modelConfig.region(), businessDate);
+        int deletedAlerts = model.clearAlertHistory(modelConfig, businessDate);
+        LOGGER.info("Refreshed alert history before dispatch: deletedAlerts={}, appid={}, modelid={}, region={}, businessDate={}.",
+                deletedAlerts,
+                appId,
+                modelConfig.modelId(),
+                modelConfig.region(),
+                businessDate);
         int dispatchedAlerts = 0;
         int duplicateAlerts = 0;
 

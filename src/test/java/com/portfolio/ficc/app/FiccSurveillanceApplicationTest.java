@@ -107,6 +107,7 @@ class FiccSurveillanceApplicationTest {
         order.verify(model).modelCode();
         order.verify(model).getTrades(modelConfig, "emea", businessDate);
         order.verify(model).evaluate(modelConfig, trades, businessDate);
+        order.verify(model).clearAlertHistory(modelConfig, businessDate);
         order.verify(model).generateJson(alert);
         order.verify(model).dispatchAlert(modelConfig, businessDate, alert, alertPayload);
     }
@@ -170,6 +171,7 @@ class FiccSurveillanceApplicationTest {
         assertEquals(0, summary.alertsGenerated());
         assertEquals(0, summary.alertsDispatched());
         assertEquals(0, summary.duplicateAlerts());
+        verify(model).clearAlertHistory(modelConfig, businessDate);
         verify(model, never()).generateJson(any(Alert.class));
         verify(model, never()).dispatchAlert(
                 any(ModelConfig.class),

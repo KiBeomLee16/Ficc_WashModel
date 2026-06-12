@@ -33,6 +33,7 @@ public class AlertHistoryRepository {
     private static final String INSERT_ALERT_HISTORY_CALL = "{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
     private static final String INSERT_ALERT_HISTORY_TRADE_CALL = "{CALL sp_insert_ficc_wash_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
     private static final String FIND_ALERT_HISTORY_CALL = "{CALL sp_find_ficc_wash_alert_history(?, ?, ?)}";
+    private static final String DELETE_ALERT_HISTORY_CALL = "{CALL sp_delete_ficc_wash_alert_history_for_run(?, ?, ?, ?)}";
 
     private final DatabaseConfig databaseConfig;
 
@@ -122,6 +123,39 @@ public class AlertHistoryRepository {
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to search alert history for appid="
                     + appId + ", region=" + region + ", businessDate=" + businessDate, exception);
+        }
+    }
+
+    public int deleteByRunCriteria(ModelConfig modelConfig, LocalDate businessDate) {
+        Objects.requireNonNull(modelConfig, "modelConfig is required");
+        Objects.requireNonNull(businessDate, "businessDate is required");
+
+        try (Connection connection = getConnection();
+             CallableStatement statement = connection.prepareCall(DELETE_ALERT_HISTORY_CALL)) {
+            statement.setInt(1, modelConfig.appId());
+            statement.setInt(2, modelConfig.modelId());
+            statement.setString(3, modelConfig.region().trim().toUpperCase());
+            statement.setDate(4, Date.valueOf(businessDate));
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    int deletedAlertCount = resultSet.getInt("deleted_alert_count");
+                    int deletedTradeCount = resultSet.getInt("deleted_trade_count");
+                    LOGGER.info("Deleted existing alert history before refresh: alerts={}, drillOutTrades={}, appid={}, modelid={}, region={}, businessDate={}.",
+                            deletedAlertCount,
+                            deletedTradeCount,
+                            modelConfig.appId(),
+                            modelConfig.modelId(),
+                            modelConfig.region(),
+                            businessDate);
+                    return deletedAlertCount;
+                }
+            }
+            return 0;
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to delete alert history for appid="
+                    + modelConfig.appId() + ", modelid=" + modelConfig.modelId()
+                    + ", region=" + modelConfig.region() + ", businessDate=" + businessDate, exception);
         }
     }
 

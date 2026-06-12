@@ -85,8 +85,6 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
 
     @Override
     public List<Alert> evaluate(ModelConfig modelConfig, List<Trade> trades, LocalDate businessDate) {
-     
-
         if (trades.isEmpty()) {
             return List.of();
         }
@@ -159,14 +157,23 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
     private Alert createOneTimeAlert(ModelConfig modelConfig, Trade tradeA, Trade tradeB, WashTradeThresholds thresholds) {
         Trade buyTrade = buyTrade(tradeA, tradeB);
         Trade sellTrade = sellTrade(tradeA, tradeB);
+        BigDecimal quantityDifference = percentDifference(buyTrade.quantity(), sellTrade.quantity());
+        BigDecimal amountDifference = percentDifference(buyTrade.totalAmount(), sellTrade.totalAmount());
+        BigDecimal matchedAmount = minimum(buyTrade.totalAmount(), sellTrade.totalAmount());
 
         List<String> reasons = new ArrayList<>();
-        reasons.add("Same Instrument Rule matched.");
-        reasons.add("Opposite Side Rule matched.");
-        reasons.add("Same Counterparty Rule matched.");
-        reasons.add("Quantity Tolerance Rule matched.");
-        reasons.add("Total Amount Tolerance Rule matched.");
-        reasons.add("Minimum Amount Rule matched.");
+        reasons.add("One-time quantity tolerance: actual difference "
+                + formatPercent(quantityDifference)
+                + ", threshold " + formatPercent(thresholds.quantityTolerancePercent())
+                + ", within threshold.");
+        reasons.add("One-time total amount tolerance: actual difference "
+                + formatPercent(amountDifference)
+                + ", threshold " + formatPercent(thresholds.totalAmountTolerancePercent())
+                + ", within threshold.");
+        reasons.add("One-time minimum amount: matched amount "
+                + matchedAmount.toPlainString()
+                + ", threshold " + thresholds.oneTimeMinTotalAmount().toPlainString()
+                + ", above threshold.");
 
         return new Alert(
                 generateAlertId(tradeA, tradeB),
@@ -248,13 +255,22 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
             BigDecimal matchedAmount,
             WashTradeThresholds thresholds
     ) {
+        BigDecimal quantityDifference = percentDifference(totalBuyQuantity, totalSellQuantity);
+        BigDecimal amountDifference = percentDifference(totalBuyAmount, totalSellAmount);
+
         List<String> reasons = new ArrayList<>();
-        reasons.add("Cumulative Match Rule matched.");
-        reasons.add("Lookup Period Rule matched.");
-        reasons.add("Same Counterparty Rule matched.");
-        reasons.add("Cumulative Quantity Rule matched.");
-        reasons.add("Cumulative Total Amount Rule matched.");
-        reasons.add("Minimum Amount Rule matched.");
+        reasons.add("Aggregate quantity tolerance: actual difference "
+                + formatPercent(quantityDifference)
+                + ", threshold " + formatPercent(thresholds.quantityTolerancePercent())
+                + ", within threshold.");
+        reasons.add("Aggregate total amount tolerance: actual difference "
+                + formatPercent(amountDifference)
+                + ", threshold " + formatPercent(thresholds.totalAmountTolerancePercent())
+                + ", within threshold.");
+        reasons.add("Aggregate minimum amount: matched amount "
+                + matchedAmount.toPlainString()
+                + ", threshold " + thresholds.cumulativeMinTotalAmount().toPlainString()
+                + ", above threshold.");
 
         return new Alert(
                 generateAlertId(buyTrade, sellTrade),
@@ -339,6 +355,10 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
         return trades.stream()
                 .sorted(Comparator.comparing(Trade::timestamp).thenComparing(Trade::tradeId))
                 .toList();
+    }
+
+    private String formatPercent(BigDecimal percent) {
+        return percent.stripTrailingZeros().toPlainString() + "%";
     }
 
     private boolean sameText(String left, String right) {
