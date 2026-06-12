@@ -9,6 +9,10 @@ export default defineConfig({
       "/run-request": {
         target: "http://localhost:8080",
         changeOrigin: true
+      },
+      "/alert-history": {
+        target: "http://localhost:8080",
+        changeOrigin: true
       }
     }
   }

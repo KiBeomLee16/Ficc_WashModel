@@ -7,11 +7,54 @@ const initialForm = {
   requestedBy: "frontend-demo"
 };
 
+function normalizeSearchCriteria(values) {
+  return {
+    appId: String(values.appId).trim(),
+    region: values.region.trim().toUpperCase(),
+    businessDate: values.businessDate
+  };
+}
+
+function alertReason(alert) {
+  try {
+    const payload = JSON.parse(alert.alertPayload);
+    if (Array.isArray(payload.reasons) && payload.reasons.length > 0) {
+      return payload.reasons.join(" ");
+    }
+  } catch {
+    return "Stored alert payload could not be parsed.";
+  }
+  return "Stored alert payload is available in alert history.";
+}
+
+function relatedTrades(alert) {
+  if (!alert.relatedTradeIds) {
+    return "No related trades";
+  }
+  return alert.relatedTradeIds.split(",").join(" / ");
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+  return String(value).replace("T", " ");
+}
+
 export default function App() {
   const [form, setForm] = useState(initialForm);
+  const [searchedCriteria, setSearchedCriteria] = useState(normalizeSearchCriteria(initialForm));
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [submitResult, setSubmitResult] = useState(null);
+  const [searchResult, setSearchResult] = useState(null);
+  const [submitError, setSubmitError] = useState("");
+  const [searchError, setSearchError] = useState("");
+  const canSearch = form.appId.trim() && form.region.trim() && form.businessDate;
+  const alerts = searchResult?.alerts || [];
+  const runRequests = searchResult?.runRequests || (searchResult?.runRequest ? [searchResult.runRequest] : []);
+  const latestRunRequest = runRequests[0];
+  const displayRunRequest = searchResult ? latestRunRequest : null;
 
   function updateField(event) {
     setForm((current) => ({
@@ -20,11 +63,41 @@ export default function App() {
     }));
   }
 
+  async function searchAlertHistory() {
+    const criteria = normalizeSearchCriteria(form);
+    setSearchedCriteria(criteria);
+    setSearchError("");
+    setIsSearching(true);
+
+    try {
+      const params = new URLSearchParams(criteria);
+      const response = await fetch(`/alert-history?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`Search failed with HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      setSearchResult(data);
+      if (data.runRequest) {
+        setSubmitResult(data.runRequest);
+      }
+    } catch (searchFailure) {
+      setSearchResult(null);
+      setSearchError(searchFailure.message || "Alert history search failed.");
+    } finally {
+      setIsSearching(false);
+    }
+  }
+
   async function submitRunRequest(event) {
     event.preventDefault();
+    const criteria = normalizeSearchCriteria(form);
     setIsSubmitting(true);
-    setResult(null);
-    setError("");
+    setSubmitResult(null);
+    setSearchResult(null);
+    setSubmitError("");
+    setSearchedCriteria(criteria);
 
     try {
       const response = await fetch("/run-request", {
@@ -39,9 +112,9 @@ export default function App() {
         throw new Error(`Request failed with HTTP ${response.status}`);
       }
 
-      setResult(await response.json());
+      setSubmitResult(await response.json());
     } catch (submissionError) {
-      setError(submissionError.message || "Run request submission failed.");
+      setSubmitError(submissionError.message || "Run request submission failed.");
     } finally {
       setIsSubmitting(false);
     }
@@ -52,8 +125,8 @@ export default function App() {
       <section className="workspace">
         <header className="top-bar">
           <div>
-            <p className="eyebrow">FICC Wash Trade Surveillance</p>
-            <h1>Run Request Console</h1>
+            <p className="eyebrow">Run Request Console</p>
+            <h1>Trade Surveillance (6/4~6/8)</h1>
           </div>
           <span className="environment-badge">Local MySQL</span>
         </header>
@@ -62,7 +135,6 @@ export default function App() {
           <section className="request-panel" aria-labelledby="request-title">
             <div className="section-heading">
               <h2 id="request-title">Create Run Request</h2>
-              <p>Submit a queue row for the Java model worker.</p>
             </div>
 
             <form onSubmit={submitRunRequest} className="run-form">
@@ -92,6 +164,8 @@ export default function App() {
                   type="date"
                   name="businessDate"
                   value={form.businessDate}
+                  min="2026-06-04"
+                  max="2026-06-08"
                   onChange={updateField}
                   required
                 />
@@ -107,77 +181,162 @@ export default function App() {
                 />
               </label>
 
-              <button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? "Submitting..." : "Submit Run Request"}
-              </button>
+              <div className="form-actions">
+                <button
+                  className="secondary-action"
+                  type="button"
+                  disabled={!canSearch || isSearching}
+                  onClick={searchAlertHistory}
+                >
+                  {isSearching ? "Searching..." : "Search Result"}
+                </button>
+                <button className="primary-action" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Submitting..." : "Submit Run Request"}
+                </button>
+              </div>
             </form>
 
-            {result && (
+            {submitResult && (
               <div className="status-message success" role="status">
-                <strong>Request submitted</strong>
+                <strong>Run request status</strong>
                 <dl>
                   <div>
                     <dt>Request ID</dt>
-                    <dd>{result.requestId}</dd>
+                    <dd>{submitResult.requestId}</dd>
                   </div>
                   <div>
                     <dt>Status</dt>
-                    <dd>{result.status}</dd>
+                    <dd>{submitResult.status}</dd>
                   </div>
                   <div>
                     <dt>Region</dt>
-                    <dd>{result.region}</dd>
+                    <dd>{submitResult.region}</dd>
+                  </div>
+                  <div>
+                    <dt>Alerts</dt>
+                    <dd>{submitResult.alertsGenerated ?? "Pending"}</dd>
                   </div>
                 </dl>
               </div>
             )}
 
-            {error && (
+            {submitError && (
               <div className="status-message error" role="alert">
                 <strong>Submission failed</strong>
-                <p>{error}</p>
+                <p>{submitError}</p>
               </div>
             )}
           </section>
+        </div>
 
-          <aside className="flow-panel" aria-label="surveillance flow">
-            <div className="section-heading">
-              <h2>Execution Flow</h2>
-              <p>The UI only creates the request. Java owns the model run.</p>
+        <section className="result-panel" aria-labelledby="result-title">
+          <div className="section-heading">
+            <h2 id="result-title">Result Window</h2>
+            <p>Search result is loaded from MySQL alert history for the selected app, region, and business date.</p>
+          </div>
+
+          <div className={alerts.length > 0 ? "result-window populated" : "result-window"}>
+            <div className="result-grid">
+              <div>
+                <span>App ID</span>
+                <strong>{searchedCriteria.appId}</strong>
+              </div>
+              <div>
+                <span>Region</span>
+                <strong>{searchedCriteria.region}</strong>
+              </div>
+              <div>
+                <span>Business Date</span>
+                <strong>{searchedCriteria.businessDate}</strong>
+              </div>
+              <div>
+                <span>Alert History</span>
+                <strong>{searchResult ? `${searchResult.alertCount} alert(s) found` : "Not searched"}</strong>
+              </div>
+              <div>
+                <span>Request ID</span>
+                <strong>{displayRunRequest?.requestId || (searchResult ? "No DB request" : "Not searched")}</strong>
+              </div>
+              <div>
+                <span>Worker Status</span>
+                <strong>{displayRunRequest?.status || (searchResult ? "No DB request" : "Waiting for search")}</strong>
+              </div>
             </div>
 
-            <ol className="flow-list">
-              <li>
-                <span>1</span>
-                <div>
-                  <strong>Insert request</strong>
-                  <p>Creates a `PENDING` row in `surveillance_run_request`.</p>
-                </div>
-              </li>
-              <li>
-                <span>2</span>
-                <div>
-                  <strong>Trigger worker</strong>
-                  <p>`FiccRunRequestWorker` claims runnable queue rows.</p>
-                </div>
-              </li>
-              <li>
-                <span>3</span>
-                <div>
-                  <strong>Run model</strong>
-                  <p>`getTrades()` and `evaluate()` execute the wash model.</p>
-                </div>
-              </li>
-              <li>
-                <span>4</span>
-                <div>
-                  <strong>Store result</strong>
-                  <p>New alerts are saved with history and drill-out trades.</p>
-                </div>
-              </li>
-            </ol>
-          </aside>
-        </div>
+            <p className="result-detail">
+              {latestRunRequest
+                ? `Latest request ${latestRunRequest.requestId} is ${latestRunRequest.status} with ${latestRunRequest.alertsGenerated} alert(s) generated.`
+                : searchResult
+                  ? `Loaded ${searchResult.alertCount} alert history row(s) for appId ${searchResult.appId}, region ${searchResult.region}, business date ${searchResult.businessDate}.`
+                  : "Use Search Result to query stored alert history from MySQL."}
+            </p>
+
+            {searchError && (
+              <div className="status-message error" role="alert">
+                <strong>Search failed</strong>
+                <p>{searchError}</p>
+              </div>
+            )}
+
+            {runRequests.length > 0 ? (
+              <div className="table-wrap">
+                <table className="result-table request-table">
+                  <thead>
+                    <tr>
+                      <th>Request ID</th>
+                      <th>Status</th>
+                      <th>Alerts Generated</th>
+                      <th>Requested At</th>
+                      <th>Started At</th>
+                      <th>Completed At</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runRequests.map((request) => (
+                      <tr key={request.requestId}>
+                        <td>{request.requestId}</td>
+                        <td>{request.status}</td>
+                        <td>{request.alertsGenerated}</td>
+                        <td>{formatDateTime(request.requestedAt)}</td>
+                        <td>{formatDateTime(request.startedAt)}</td>
+                        <td>{formatDateTime(request.completedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {alerts.length > 0 ? (
+              <div className="table-wrap">
+                <table className="result-table">
+                  <thead>
+                    <tr>
+                      <th>Match Type</th>
+                      <th>Alert ID</th>
+                      <th>Related Trades</th>
+                      <th>Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {alerts.map((alert) => (
+                      <tr key={alert.alertHistoryId}>
+                        <td>{alert.matchType}</td>
+                        <td>{alert.alertId}</td>
+                        <td>{relatedTrades(alert)}</td>
+                        <td>{alertReason(alert)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+
+            {displayRunRequest ? (
+              <pre className="result-json">{JSON.stringify(displayRunRequest, null, 2)}</pre>
+            ) : null}
+          </div>
+        </section>
       </section>
     </main>
   );
