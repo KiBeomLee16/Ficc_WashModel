@@ -7,6 +7,8 @@ const initialForm = {
   requestedBy: "frontend-demo"
 };
 
+const DEFAULT_TOLERANCE_THRESHOLD_PERCENT = 5;
+
 function normalizeSearchCriteria(values) {
   return {
     appId: String(values.appId).trim(),
@@ -16,15 +18,107 @@ function normalizeSearchCriteria(values) {
 }
 
 function alertReason(alert) {
+  const matchLabel = displayMatchType(alert.matchType).replace("_TRANSACTION", "").replace("_", "-").toLowerCase();
+  const prefix = `${matchLabel.charAt(0).toUpperCase()}${matchLabel.slice(1)}`;
+
   try {
     const payload = JSON.parse(alert.alertPayload);
     if (Array.isArray(payload.reasons) && payload.reasons.length > 0) {
-      return payload.reasons.join(" ");
+      const reasonText = payload.reasons.join(" ");
+
+      if (/actual difference|matched amount/i.test(reasonText)) {
+        return reasonText;
+      }
+    }
+
+    const calculatedReason = calculateThresholdReason(prefix, payload);
+    if (calculatedReason) {
+      return calculatedReason;
+    }
+
+    if (Array.isArray(payload.reasons) && payload.reasons.length > 0) {
+      const reasonText = payload.reasons.join(" ");
+
+      const thresholdChecks = [];
+
+      if (/quantity/i.test(reasonText)) {
+        thresholdChecks.push("quantity tolerance");
+      }
+      if (/total amount/i.test(reasonText)) {
+        thresholdChecks.push("total amount tolerance");
+      }
+      if (/minimum/i.test(reasonText)) {
+        thresholdChecks.push("minimum amount");
+      }
+
+      if (thresholdChecks.length > 0) {
+        return `${prefix} threshold breach: ${thresholdChecks.join(", ")}.`;
+      }
     }
   } catch {
     return "Stored alert payload could not be parsed.";
   }
-  return "Stored alert payload is available in alert history.";
+  return `${prefix} threshold breach: threshold conditions met.`;
+}
+
+function calculateThresholdReason(prefix, payload) {
+  const totalBuyQuantity = toNumber(payload.totalBuyQuantity);
+  const totalSellQuantity = toNumber(payload.totalSellQuantity);
+  const totalBuyAmount = toNumber(payload.totalBuyAmount);
+  const totalSellAmount = toNumber(payload.totalSellAmount);
+  const thresholdAmount = toNumber(payload.thresholdAmount);
+
+  if (
+    totalBuyQuantity == null
+    || totalSellQuantity == null
+    || totalBuyAmount == null
+    || totalSellAmount == null
+    || thresholdAmount == null
+  ) {
+    return "";
+  }
+
+  const toleranceThreshold = toNumber(payload.quantityTolerancePercent)
+    ?? toNumber(payload.totalAmountTolerancePercent)
+    ?? DEFAULT_TOLERANCE_THRESHOLD_PERCENT;
+  const matchedAmount = Math.min(totalBuyAmount, totalSellAmount);
+
+  return [
+    `${prefix} quantity tolerance: actual difference ${formatPercent(percentDifference(totalBuyQuantity, totalSellQuantity))}, threshold ${formatPercent(toleranceThreshold)}, within threshold.`,
+    `${prefix} total amount tolerance: actual difference ${formatPercent(percentDifference(totalBuyAmount, totalSellAmount))}, threshold ${formatPercent(toleranceThreshold)}, within threshold.`,
+    `${prefix} minimum amount: matched amount ${formatNumber(matchedAmount)}, threshold ${formatNumber(thresholdAmount)}, above threshold.`
+  ].join(" ");
+}
+
+function toNumber(value) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function percentDifference(left, right) {
+  const max = Math.max(left, right);
+  if (max === 0) {
+    return 0;
+  }
+  return (Math.abs(left - right) * 100) / max;
+}
+
+function formatPercent(value) {
+  return `${formatNumber(value, 6)}%`;
+}
+
+function formatNumber(value, maximumFractionDigits = 6) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits,
+    useGrouping: false
+  }).format(value);
+}
+
+function displayMatchType(matchType) {
+  if (matchType === "CUMULATIVE_TRANSACTION") {
+    return "AGGREGATE_TRANSACTION";
+  }
+  return matchType || "-";
 }
 
 function relatedTrades(alert) {
@@ -41,6 +135,16 @@ function formatDateTime(value) {
   return String(value).replace("T", " ");
 }
 
+function resultMessageForRequest(request) {
+  if (request.status !== "COMPLETED") {
+    return `Request ${request.requestId} is ${request.status}. Result is not available yet.`;
+  }
+  if (request.alertsGenerated === 0) {
+    return `Request ${request.requestId} completed with no generated alerts.`;
+  }
+  return `Request ${request.requestId} completed with ${request.alertsGenerated} generated alert(s).`;
+}
+
 export default function App() {
   const [form, setForm] = useState(initialForm);
   const [searchedCriteria, setSearchedCriteria] = useState(normalizeSearchCriteria(initialForm));
@@ -53,8 +157,7 @@ export default function App() {
   const canSearch = form.appId.trim() && form.region.trim() && form.businessDate;
   const alerts = searchResult?.alerts || [];
   const runRequests = searchResult?.runRequests || (searchResult?.runRequest ? [searchResult.runRequest] : []);
-  const latestRunRequest = runRequests[0];
-  const displayRunRequest = searchResult ? latestRunRequest : null;
+  const displayedRunRequests = searchResult?.runRequest ? [searchResult.runRequest] : [];
 
   function updateField(event) {
     setForm((current) => ({
@@ -254,21 +357,19 @@ export default function App() {
                 <strong>{searchResult ? `${searchResult.alertCount} alert(s) found` : "Not searched"}</strong>
               </div>
               <div>
-                <span>Request ID</span>
-                <strong>{displayRunRequest?.requestId || (searchResult ? "No DB request" : "Not searched")}</strong>
+                <span>Run Requests</span>
+                <strong>{searchResult ? `${runRequests.length} request(s) found` : "Not searched"}</strong>
               </div>
               <div>
-                <span>Worker Status</span>
-                <strong>{displayRunRequest?.status || (searchResult ? "No DB request" : "Waiting for search")}</strong>
+                <span>Result Source</span>
+                <strong>{searchResult ? "MySQL" : "Waiting for search"}</strong>
               </div>
             </div>
 
             <p className="result-detail">
-              {latestRunRequest
-                ? `Latest request ${latestRunRequest.requestId} is ${latestRunRequest.status} with ${latestRunRequest.alertsGenerated} alert(s) generated.`
-                : searchResult
-                  ? `Loaded ${searchResult.alertCount} alert history row(s) for appId ${searchResult.appId}, region ${searchResult.region}, business date ${searchResult.businessDate}.`
-                  : "Use Search Result to query stored alert history from MySQL."}
+              {searchResult
+                ? `Showing latest request result. Loaded ${runRequests.length} run request row(s) and ${searchResult.alertCount} alert history row(s) for appId ${searchResult.appId}, region ${searchResult.region}, business date ${searchResult.businessDate}.`
+                : "Use Search Result to query stored alert history from MySQL."}
             </p>
 
             {searchError && (
@@ -278,62 +379,72 @@ export default function App() {
               </div>
             )}
 
-            {runRequests.length > 0 ? (
-              <div className="table-wrap">
-                <table className="result-table request-table">
-                  <thead>
-                    <tr>
-                      <th>Request ID</th>
-                      <th>Status</th>
-                      <th>Alerts Generated</th>
-                      <th>Requested At</th>
-                      <th>Started At</th>
-                      <th>Completed At</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {runRequests.map((request) => (
-                      <tr key={request.requestId}>
-                        <td>{request.requestId}</td>
-                        <td>{request.status}</td>
-                        <td>{request.alertsGenerated}</td>
-                        <td>{formatDateTime(request.requestedAt)}</td>
-                        <td>{formatDateTime(request.startedAt)}</td>
-                        <td>{formatDateTime(request.completedAt)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
+            {displayedRunRequests.length > 0 ? (
+              <div className="request-result-list">
+                {displayedRunRequests.map((request) => {
+                  const shouldShowAlerts = request.status === "COMPLETED"
+                    && request.alertsGenerated > 0
+                    && alerts.length > 0;
 
-            {alerts.length > 0 ? (
-              <div className="table-wrap">
-                <table className="result-table">
-                  <thead>
-                    <tr>
-                      <th>Match Type</th>
-                      <th>Alert ID</th>
-                      <th>Related Trades</th>
-                      <th>Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {alerts.map((alert) => (
-                      <tr key={alert.alertHistoryId}>
-                        <td>{alert.matchType}</td>
-                        <td>{alert.alertId}</td>
-                        <td>{relatedTrades(alert)}</td>
-                        <td>{alertReason(alert)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
+                  return (
+                    <section className="request-result-card" key={request.requestId}>
+                      <div className="request-result-header">
+                        <div>
+                          <h3>Request ID {request.requestId}</h3>
+                          <p>{resultMessageForRequest(request)}</p>
+                        </div>
+                        <span className={`status-pill ${request.status.toLowerCase()}`}>
+                          {request.status}
+                        </span>
+                      </div>
 
-            {displayRunRequest ? (
-              <pre className="result-json">{JSON.stringify(displayRunRequest, null, 2)}</pre>
+                      <div className="request-meta-grid">
+                        <div>
+                          <span>Alerts Generated</span>
+                          <strong>{request.alertsGenerated}</strong>
+                        </div>
+                        <div>
+                          <span>Requested At</span>
+                          <strong>{formatDateTime(request.requestedAt)}</strong>
+                        </div>
+                        <div>
+                          <span>Started At</span>
+                          <strong>{formatDateTime(request.startedAt)}</strong>
+                        </div>
+                        <div>
+                          <span>Completed At</span>
+                          <strong>{formatDateTime(request.completedAt)}</strong>
+                        </div>
+                      </div>
+
+                      {shouldShowAlerts ? (
+                        <div className="table-wrap">
+                          <table className="result-table">
+                            <thead>
+                              <tr>
+                                <th>Match Type</th>
+                                <th>Alert ID</th>
+                                <th>Related Trades</th>
+                                <th>Reason</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {alerts.map((alert) => (
+                                <tr key={`${request.requestId}-${alert.alertHistoryId}`}>
+                                  <td>{displayMatchType(alert.matchType)}</td>
+                                  <td>{alert.alertId}</td>
+                                  <td>{relatedTrades(alert)}</td>
+                                  <td>{alertReason(alert)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null}
+                    </section>
+                  );
+                })}
+              </div>
             ) : null}
           </div>
         </section>
