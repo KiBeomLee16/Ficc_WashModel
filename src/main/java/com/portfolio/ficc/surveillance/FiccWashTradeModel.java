@@ -55,6 +55,7 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
     @Override
     public List<Trade> getTrades(ModelConfig modelConfig, String region, LocalDate businessDate) {
         Objects.requireNonNull(modelConfig, "modelConfig is required");
+        Objects.requireNonNull(region, "region is required");
         String normalizedRegion = region.toUpperCase();
         Objects.requireNonNull(businessDate, "businessDate is required");
 
@@ -121,7 +122,7 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
 
         return sortedTrades(trades).stream()
                 .filter(trade -> trade.timestamp().toLocalDate().equals(businessDate))
-                .collect(Collectors.groupingBy(CumulativeKey::from, LinkedHashMap::new, Collectors.toList()))
+                .collect(Collectors.groupingBy(TradeMatchKey::from, LinkedHashMap::new, Collectors.toList()))
                 .values()
                 .stream()
                 .flatMap(group -> {
@@ -199,9 +200,9 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
             WashTradeThresholds thresholds,
             List<Alert> alerts
     ) {
-        Map<CumulativeKey, List<Trade>> groupedTrades = new LinkedHashMap<>();
+        Map<TradeMatchKey, List<Trade>> groupedTrades = new LinkedHashMap<>();
         for (Trade trade : sortedTrades(trades)) {
-            groupedTrades.computeIfAbsent(CumulativeKey.from(trade), ignored -> new ArrayList<>()).add(trade);
+            groupedTrades.computeIfAbsent(TradeMatchKey.from(trade), ignored -> new ArrayList<>()).add(trade);
         }
 
         for (List<Trade> group : groupedTrades.values()) {
@@ -376,7 +377,7 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
     ) {
     }
 
-    private record CumulativeKey(
+    private record TradeMatchKey(
             String assetClass,
             String instrumentId,
             LocalDate maturity,
@@ -384,18 +385,14 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
             String counterpartyId
     ) {
 
-        private static CumulativeKey from(Trade trade) {
-            return new CumulativeKey(
-                    normalize(trade.assetClass()),
-                    normalize(trade.instrumentId()),
+        private static TradeMatchKey from(Trade trade) {
+            return new TradeMatchKey(
+                    trade.assetClass(),
+                    trade.instrumentId(),
                     trade.maturity(),
-                    normalize(trade.currency()),
-                    normalize(trade.counterpartyId())
+                    trade.currency(),
+                    trade.counterpartyId()
             );
-        }
-
-        private static String normalize(String value) {
-            return value.trim().toUpperCase();
         }
     }
 }

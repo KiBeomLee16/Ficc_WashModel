@@ -36,10 +36,13 @@ public class FiccSurveillanceApplication {
         this.modelRegistry = Objects.requireNonNull(modelRegistry, "modelRegistry is required");
     }
 
-    public RunSummary run(int appId, String region, LocalDate businessDate) {
+    public RunSummary run(long requestId, int appId, String region, LocalDate businessDate) {
+        if (requestId <= 0) {
+            throw new IllegalArgumentException("requestId must be positive");
+        }
     	LOGGER.info("------------------------------------------------------------------------------------------");
-        LOGGER.info("Starting surveillance pipeline: appid={}, region={}, businessDate={}.",
-                appId, region, businessDate);
+        LOGGER.info("Starting surveillance pipeline: requestId={}, appid={}, region={}, businessDate={}.",
+                requestId, appId, region, businessDate);
         LOGGER.info("------------------------------------------------------------------------------------------");
         ModelConfig modelConfig = getSpecificModel(appId, region);
         LOGGER.info("Resolved surveillance model: appid={}, modelid={}, modelCode={}, modelClass={}, region={}.",
@@ -50,7 +53,7 @@ public class FiccSurveillanceApplication {
                 modelConfig.region());
         AbstractSurveillanceModel model = getModel(modelConfig);
         LOGGER.info("------------------------------------------------------------------------------------------");
-        List<Trade> trades = model.getTrades(modelConfig, region, businessDate);
+        List<Trade> trades = model.getTrades(modelConfig, modelConfig.region(), businessDate);
         LOGGER.info("Loaded {} trades: region={}, businessDate={}.",
                 trades.size(),  modelConfig.region(), businessDate);
 
@@ -70,7 +73,7 @@ public class FiccSurveillanceApplication {
 
         for (Alert alert : alerts) {
             String alertPayload = model.generateJson(alert);
-            if (model.dispatchAlert(modelConfig, businessDate, alert, alertPayload)) {
+            if (model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload)) {
                 dispatchedAlerts++;
             } else {
                 duplicateAlerts++;
@@ -81,7 +84,8 @@ public class FiccSurveillanceApplication {
             }
         }
         LOGGER.info("------------------------------------------------------------------------------------------");
-        LOGGER.info("Completed surveillance pipeline: tradesProcessed={}, alertsGenerated={}, alertsDispatched={}, duplicateAlerts={}, appid={}, modelid={}, region={}, businessDate={}.",
+        LOGGER.info("Completed surveillance pipeline: requestId={}, tradesProcessed={}, alertsGenerated={}, alertsDispatched={}, duplicateAlerts={}, appid={}, modelid={}, region={}, businessDate={}.",
+                requestId,
                 trades.size(),
                 alerts.size(),
                 dispatchedAlerts,

@@ -82,6 +82,33 @@ class FiccWashTradeModelGetTradesTest {
     }
 
     @Test
+    void getTradesPassesCalibrationRegionToStoredProcedure() throws Exception {
+        ModelConfig calibrationConfig = new ModelConfig(
+                4,
+                1,
+                "NAMRC",
+                "NAMRC FICC Surveillance App",
+                "FICC_WASH_TRADE",
+                "FICC Wash Trade Surveillance Model",
+                "com.portfolio.ficc.surveillance.FiccWashTradeModel"
+        );
+        LocalDate businessDate = LocalDate.of(2026, 6, 8);
+        when(connection.prepareCall("{CALL sp_get_ficc_trades(?, ?, ?, ?)}")).thenReturn(tradeStatement);
+        when(tradeStatement.executeQuery()).thenReturn(tradeResultSet);
+        when(tradeResultSet.next()).thenReturn(false);
+
+        FiccWashTradeModel model = new ConnectionBackedFiccWashTradeModel(connection);
+
+        List<Trade> trades = model.getTrades(calibrationConfig, "namrc", businessDate);
+
+        assertEquals(0, trades.size());
+        verify(tradeStatement).setInt(1, 4);
+        verify(tradeStatement).setInt(2, 1);
+        verify(tradeStatement).setString(3, "NAMRC");
+        verify(tradeStatement).setDate(4, Date.valueOf(businessDate));
+    }
+
+    @Test
     void getTradesWrapsSqlExceptionWithStoredProcedureContext() throws Exception {
         when(connection.prepareCall("{CALL sp_get_ficc_trades(?, ?, ?, ?)}")).thenThrow(new SQLException("database down"));
 

@@ -54,7 +54,11 @@ public class FiccRunRequestWorker {
 		System.out.printf("Run request %d started for appid=%d, region=%s, businessDate=%s.%n", request.requestId(),
 				request.appId(), request.region(), request.businessDate());
 		try {
-			RunSummary summary = surveillanceApplication.run(request.appId(), request.region(), request.businessDate());
+			RunSummary summary = surveillanceApplication.run(
+					request.requestId(),
+					request.appId(),
+					request.region(),
+					request.businessDate());
 			runRequestRepository.markCompleted(request, summary);
 			LOGGER.info("------------------------------------------------------------------------------------------");
 			LOGGER.info(

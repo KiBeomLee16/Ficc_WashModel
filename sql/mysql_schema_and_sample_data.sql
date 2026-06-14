@@ -3,6 +3,7 @@ USE ficc_surveillance;
 
 DROP PROCEDURE IF EXISTS sp_get_surveillance_model_config;
 DROP PROCEDURE IF EXISTS sp_get_surveillance_model_threshold;
+DROP PROCEDURE IF EXISTS sp_update_surveillance_model_threshold;
 DROP PROCEDURE IF EXISTS sp_get_ficc_trades;
 DROP PROCEDURE IF EXISTS sp_claim_next_surveillance_run_request;
 DROP PROCEDURE IF EXISTS sp_insert_surveillance_run_request;
@@ -85,6 +86,7 @@ CREATE TABLE ficc_wash_alert_history (
     alert_history_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     alert_fingerprint CHAR(64) NOT NULL,
     alert_id VARCHAR(80) NOT NULL,
+    request_id BIGINT NOT NULL,
     appid INT NOT NULL,
     modelid INT NOT NULL,
     region VARCHAR(10) NOT NULL,
@@ -99,6 +101,10 @@ CREATE TABLE ficc_wash_alert_history (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_ficc_wash_alert_history_fingerprint (alert_fingerprint),
     INDEX idx_ficc_wash_alert_history_run (appid, modelid, region, business_date),
+    INDEX idx_ficc_wash_alert_history_request (request_id),
+    CONSTRAINT fk_ficc_wash_alert_history_request
+        FOREIGN KEY (request_id)
+        REFERENCES surveillance_run_request (request_id),
     CONSTRAINT fk_ficc_wash_alert_history_config
         FOREIGN KEY (appid, modelid, region)
         REFERENCES surveillance_model_config (appid, modelid, region)
@@ -148,7 +154,10 @@ INSERT INTO surveillance_model_master (
 ) VALUES
 (1, 'NAMR', 'NAMR FICC_WASH Model', 'FICC_WASH_TRADE', 'FICC Trade Surveillance', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'North America FICC_WASH Model.', TRUE),
 (2, 'EMEA', 'EMEA FICC_WASH Model', 'FICC_WASH_TRADE', 'FICC Trade Surveillance', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Europe, Middle East, and Africa FICC_WASH Model.', TRUE),
-(3, 'APAC', 'APAC FICC_WASH Model', 'FICC_WASH_TRADE', 'FICC Trade Surveillance', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Asia Pacific FICC_WASH Model.', TRUE);
+(3, 'APAC', 'APAC FICC_WASH Model', 'FICC_WASH_TRADE', 'FICC Trade Surveillance', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Asia Pacific FICC_WASH Model.', TRUE),
+(4, 'NAMRC', 'NAMRC FICC_WASH Model', 'FICC_WASH_TRADE', 'FICC Trade Surveillance', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'North America FICC_WASH Calibration Model.', TRUE),
+(5, 'EMEAC', 'EMEAC FICC_WASH Model', 'FICC_WASH_TRADE', 'FICC Trade Surveillance', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Europe, Middle East, and Africa FICC_WASH Calibration Model.', TRUE),
+(6, 'APACC', 'APACC FICC_WASH Model', 'FICC_WASH_TRADE', 'FICC Trade Surveillance', 'com.portfolio.ficc.surveillance.FiccWashTradeModel', 'Asia Pacific FICC_WASH Calibration Model.', TRUE);
 
 INSERT INTO surveillance_model_config (
     appid,
@@ -158,7 +167,10 @@ INSERT INTO surveillance_model_config (
 ) VALUES
 (1, 1, 'NAMR', TRUE),
 (2, 1, 'EMEA', TRUE),
-(3, 1, 'APAC', TRUE);
+(3, 1, 'APAC', TRUE),
+(4, 1, 'NAMRC', TRUE),
+(5, 1, 'EMEAC', TRUE),
+(6, 1, 'APACC', TRUE);
 
 INSERT INTO surveillance_run_request (
     appid,
@@ -166,21 +178,21 @@ INSERT INTO surveillance_run_request (
     business_date,
     requested_by
 ) VALUES
+(1, 'NAMR', '2026-06-01', 'portfolio-seed'),
+(1, 'NAMR', '2026-06-02', 'portfolio-seed'),
+(1, 'NAMR', '2026-06-03', 'portfolio-seed'),
 (1, 'NAMR', '2026-06-04', 'portfolio-seed'),
 (1, 'NAMR', '2026-06-05', 'portfolio-seed'),
-(1, 'NAMR', '2026-06-06', 'portfolio-seed'),
-(1, 'NAMR', '2026-06-07', 'portfolio-seed'),
-(1, 'NAMR', '2026-06-08', 'portfolio-seed'),
+(2, 'EMEA', '2026-06-01', 'portfolio-seed'),
+(2, 'EMEA', '2026-06-02', 'portfolio-seed'),
+(2, 'EMEA', '2026-06-03', 'portfolio-seed'),
 (2, 'EMEA', '2026-06-04', 'portfolio-seed'),
 (2, 'EMEA', '2026-06-05', 'portfolio-seed'),
-(2, 'EMEA', '2026-06-06', 'portfolio-seed'),
-(2, 'EMEA', '2026-06-07', 'portfolio-seed'),
-(2, 'EMEA', '2026-06-08', 'portfolio-seed'),
+(3, 'APAC', '2026-06-01', 'portfolio-seed'),
+(3, 'APAC', '2026-06-02', 'portfolio-seed'),
+(3, 'APAC', '2026-06-03', 'portfolio-seed'),
 (3, 'APAC', '2026-06-04', 'portfolio-seed'),
-(3, 'APAC', '2026-06-05', 'portfolio-seed'),
-(3, 'APAC', '2026-06-06', 'portfolio-seed'),
-(3, 'APAC', '2026-06-07', 'portfolio-seed'),
-(3, 'APAC', '2026-06-08', 'portfolio-seed');
+(3, 'APAC', '2026-06-05', 'portfolio-seed');
 
 INSERT INTO surveillance_model_threshold (
     appid,
@@ -202,7 +214,20 @@ INSERT INTO surveillance_model_threshold (
 (3, 1, 'APAC', 'ONE_TIME_MIN_TOTAL_AMOUNT', 100000000.000000, 0, TRUE),
 (3, 1, 'APAC', 'CUMULATIVE_MIN_TOTAL_AMOUNT', 5000000.000000, 4, TRUE),
 (3, 1, 'APAC', 'QUANTITY_TOLERANCE_PERCENT', 5.000000, 0, TRUE),
-(3, 1, 'APAC', 'TOTAL_AMOUNT_TOLERANCE_PERCENT', 5.000000, 0, TRUE);
+(3, 1, 'APAC', 'TOTAL_AMOUNT_TOLERANCE_PERCENT', 5.000000, 0, TRUE),
+(4, 1, 'NAMRC', 'ONE_TIME_MIN_TOTAL_AMOUNT', 100000000.000000, 0, TRUE),
+(4, 1, 'NAMRC', 'CUMULATIVE_MIN_TOTAL_AMOUNT', 5000000.000000, 4, TRUE),
+(4, 1, 'NAMRC', 'QUANTITY_TOLERANCE_PERCENT', 5.000000, 0, TRUE),
+(4, 1, 'NAMRC', 'TOTAL_AMOUNT_TOLERANCE_PERCENT', 5.000000, 0, TRUE),
+(5, 1, 'EMEAC', 'ONE_TIME_MIN_TOTAL_AMOUNT', 100000000.000000, 0, TRUE),
+(5, 1, 'EMEAC', 'CUMULATIVE_MIN_TOTAL_AMOUNT', 5000000.000000, 4, TRUE),
+(5, 1, 'EMEAC', 'QUANTITY_TOLERANCE_PERCENT', 5.000000, 0, TRUE),
+(5, 1, 'EMEAC', 'TOTAL_AMOUNT_TOLERANCE_PERCENT', 5.000000, 0, TRUE),
+(6, 1, 'APACC', 'ONE_TIME_MIN_TOTAL_AMOUNT', 100000000.000000, 0, TRUE),
+(6, 1, 'APACC', 'CUMULATIVE_MIN_TOTAL_AMOUNT', 5000000.000000, 4, TRUE),
+(6, 1, 'APACC', 'QUANTITY_TOLERANCE_PERCENT', 5.000000, 0, TRUE),
+(6, 1, 'APACC', 'TOTAL_AMOUNT_TOLERANCE_PERCENT', 5.000000, 0, TRUE);
+
 
 CREATE TABLE ficc_trade (
     trade_id VARCHAR(50) PRIMARY KEY,
@@ -247,54 +272,54 @@ INSERT INTO ficc_trade (
     book,
     broker
 ) VALUES
-('T-NAMR-0604-OT-001', 'NAMR', '2026-06-04', '2026-06-04 09:15:00', 'Fixed Income', 'UST-2Y-0604', '2028-06-30', 'USD', 'BUY', 2000000, 100.2500, 'CP-OT-0604', 'ACCT-OT-0604-A', 'Delta Rates Master Fund', 'TRDR-104', 'Rates', 'GOVT-OT-0604', 'BRKR-NY-1'),
-('T-NAMR-0604-OT-002', 'NAMR', '2026-06-04', '2026-06-04 09:15:04', 'Fixed Income', 'UST-2Y-0604', '2028-06-30', 'USD', 'SELL', 1990000, 100.2510, 'CP-OT-0604', 'ACCT-OT-0604-B', 'Delta Rates Master Fund', 'TRDR-104', 'Rates', 'GOVT-OT-0604', 'BRKR-NY-1'),
-('T-NAMR-0604-CUM-BUY-1', 'NAMR', '2026-06-04', '2026-06-04 10:00:00', 'Currencies', 'EUR/USD-CUM-0604', '2026-06-10', 'USD', 'BUY', 3000000, 1.10000, 'CP-CUM-0604', 'ACCT-CUM-0604-A', 'Aurora Macro Fund', 'TRDR-204', 'FX', 'FX-CUM-0604-A', 'BRKR-LON-1'),
-('T-NAMR-0604-CUM-BUY-2', 'NAMR', '2026-06-04', '2026-06-04 10:00:11', 'Currencies', 'EUR/USD-CUM-0604', '2026-06-10', 'USD', 'BUY', 2000000, 1.10000, 'CP-CUM-0604', 'ACCT-CUM-0604-A', 'Aurora Macro Fund', 'TRDR-204', 'FX', 'FX-CUM-0604-A', 'BRKR-LON-1'),
-('T-NAMR-0604-CUM-SELL-1', 'NAMR', '2026-06-04', '2026-06-04 10:00:25', 'Currencies', 'EUR/USD-CUM-0604', '2026-06-10', 'USD', 'SELL', 2500000, 1.10020, 'CP-CUM-0604', 'ACCT-CUM-0604-B', 'Aurora Macro Fund', 'TRDR-205', 'FX', 'FX-CUM-0604-B', 'BRKR-LON-1'),
-('T-NAMR-0604-CUM-SELL-2', 'NAMR', '2026-06-04', '2026-06-04 10:00:39', 'Currencies', 'EUR/USD-CUM-0604', '2026-06-10', 'USD', 'SELL', 2450000, 1.10020, 'CP-CUM-0604', 'ACCT-CUM-0604-B', 'Aurora Macro Fund', 'TRDR-205', 'FX', 'FX-CUM-0604-B', 'BRKR-LON-1'),
-('T-NAMR-0604-NA-001', 'NAMR', '2026-06-04', '2026-06-04 13:20:00', 'Commodities', 'WTI-DEC26-NA-0604', '2026-12-20', 'USD', 'BUY', 1000, 75.0000, 'CP-NA-0604', 'ACCT-NA-0604-A', 'Physical Energy Fund', 'TRDR-304', 'Commodities', 'ENERGY-NA-0604', 'BRKR-HOU-1'),
-('T-NAMR-0604-NA-002', 'NAMR', '2026-06-04', '2026-06-04 13:27:00', 'Commodities', 'WTI-DEC26-NA-0604', '2026-12-20', 'USD', 'SELL', 1800, 75.5000, 'CP-NA-0604', 'ACCT-NA-0604-B', 'Physical Energy Fund', 'TRDR-305', 'Commodities', 'ENERGY-NA-0604', 'BRKR-HOU-1'),
-('T-NAMR-0605-CUM-BUY-1', 'NAMR', '2026-06-04', '2026-06-04 15:10:00', 'Currencies', 'GBP/USD-CUM-0605', '2026-06-12', 'USD', 'BUY', 2000000, 1.26000, 'CP-CUM-0605', 'ACCT-CUM-0605-A', 'Boreal Macro Fund', 'TRDR-215', 'FX', 'FX-CUM-0605-A', 'BRKR-LON-2'),
-('T-NAMR-0605-OT-001', 'NAMR', '2026-06-05', '2026-06-05 09:18:00', 'Fixed Income', 'CORP-ALPHA-2029', '2029-09-15', 'USD', 'BUY', 2500000, 101.2500, 'CP-OT-0605', 'ACCT-OT-0605-A', 'Orion Credit Fund', 'TRDR-105', 'Credit', 'CREDIT-OT-0605', 'BRKR-NY-2'),
-('T-NAMR-0605-OT-002', 'NAMR', '2026-06-05', '2026-06-05 09:18:05', 'Fixed Income', 'CORP-ALPHA-2029', '2029-09-15', 'USD', 'SELL', 2490000, 101.2510, 'CP-OT-0605', 'ACCT-OT-0605-B', 'Orion Credit Fund', 'TRDR-105', 'Credit', 'CREDIT-OT-0605', 'BRKR-NY-2'),
-('T-NAMR-0605-CUM-BUY-2', 'NAMR', '2026-06-05', '2026-06-05 10:05:00', 'Currencies', 'GBP/USD-CUM-0605', '2026-06-12', 'USD', 'BUY', 3000000, 1.26000, 'CP-CUM-0605', 'ACCT-CUM-0605-A', 'Boreal Macro Fund', 'TRDR-215', 'FX', 'FX-CUM-0605-A', 'BRKR-LON-2'),
-('T-NAMR-0605-CUM-SELL-1', 'NAMR', '2026-06-05', '2026-06-05 10:05:18', 'Currencies', 'GBP/USD-CUM-0605', '2026-06-12', 'USD', 'SELL', 2500000, 1.26010, 'CP-CUM-0605', 'ACCT-CUM-0605-B', 'Boreal Macro Fund', 'TRDR-216', 'FX', 'FX-CUM-0605-B', 'BRKR-LON-2'),
-('T-NAMR-0605-CUM-SELL-2', 'NAMR', '2026-06-05', '2026-06-05 10:05:36', 'Currencies', 'GBP/USD-CUM-0605', '2026-06-12', 'USD', 'SELL', 2450000, 1.26010, 'CP-CUM-0605', 'ACCT-CUM-0605-B', 'Boreal Macro Fund', 'TRDR-216', 'FX', 'FX-CUM-0605-B', 'BRKR-LON-2'),
-('T-NAMR-0605-NA-001', 'NAMR', '2026-06-05', '2026-06-05 14:00:00', 'Fixed Income', 'UST-5Y-NA-0605', '2031-06-30', 'USD', 'BUY', 5000000, 99.0000, 'CP-NA-0605', 'ACCT-NA-0605-A', 'Mismatch Rates Fund', 'TRDR-315', 'Rates', 'RATES-NA-0605', 'BRKR-CHI-1'),
-('T-NAMR-0605-NA-002', 'NAMR', '2026-06-05', '2026-06-05 14:00:09', 'Fixed Income', 'UST-5Y-NA-0605', '2031-06-30', 'USD', 'SELL', 4000000, 99.0000, 'CP-NA-0605', 'ACCT-NA-0605-B', 'Mismatch Rates Fund', 'TRDR-316', 'Rates', 'RATES-NA-0605', 'BRKR-CHI-1'),
-('T-NAMR-0606-CUM-BUY-1', 'NAMR', '2026-06-05', '2026-06-05 15:05:00', 'Currencies', 'AUD/USD-CUM-0606', '2026-06-13', 'USD', 'BUY', 5000000, 0.66000, 'CP-CUM-0606', 'ACCT-CUM-0606-A', 'Cascade Macro Fund', 'TRDR-226', 'FX', 'FX-CUM-0606-A', 'BRKR-SYD-1'),
-('T-NAMR-0606-CUM-BUY-2', 'NAMR', '2026-06-05', '2026-06-05 15:05:12', 'Currencies', 'AUD/USD-CUM-0606', '2026-06-13', 'USD', 'BUY', 4000000, 0.66000, 'CP-CUM-0606', 'ACCT-CUM-0606-A', 'Cascade Macro Fund', 'TRDR-226', 'FX', 'FX-CUM-0606-A', 'BRKR-SYD-1'),
-('T-NAMR-0606-OT-001', 'NAMR', '2026-06-06', '2026-06-06 09:21:00', 'Fixed Income', 'UST-5Y-0606', '2031-06-30', 'USD', 'BUY', 5000000, 98.5000, 'CP-OT-0606', 'ACCT-OT-0606-A', 'Northstar Rates Fund', 'TRDR-106', 'Rates', 'GOVT-OT-0606', 'BRKR-NY-3'),
-('T-NAMR-0606-OT-002', 'NAMR', '2026-06-06', '2026-06-06 09:21:04', 'Fixed Income', 'UST-5Y-0606', '2031-06-30', 'USD', 'SELL', 4980000, 98.5010, 'CP-OT-0606', 'ACCT-OT-0606-B', 'Northstar Rates Fund', 'TRDR-106', 'Rates', 'GOVT-OT-0606', 'BRKR-NY-3'),
-('T-NAMR-0606-CUM-SELL-1', 'NAMR', '2026-06-06', '2026-06-06 10:12:00', 'Currencies', 'AUD/USD-CUM-0606', '2026-06-13', 'USD', 'SELL', 4500000, 0.66010, 'CP-CUM-0606', 'ACCT-CUM-0606-B', 'Cascade Macro Fund', 'TRDR-227', 'FX', 'FX-CUM-0606-B', 'BRKR-SYD-1'),
-('T-NAMR-0606-CUM-SELL-2', 'NAMR', '2026-06-06', '2026-06-06 10:12:17', 'Currencies', 'AUD/USD-CUM-0606', '2026-06-13', 'USD', 'SELL', 4400000, 0.66010, 'CP-CUM-0606', 'ACCT-CUM-0606-B', 'Cascade Macro Fund', 'TRDR-227', 'FX', 'FX-CUM-0606-B', 'BRKR-SYD-1'),
-('T-NAMR-0606-NA-001', 'NAMR', '2026-06-06', '2026-06-06 13:15:00', 'Commodities', 'XAU-AUG26-NA-0606', '2026-08-31', 'USD', 'BUY', 1000, 2350.0000, 'CP-NA-0606-A', 'ACCT-NA-0606-A', 'Metals Opportunity Fund', 'TRDR-326', 'Commodities', 'METALS-NA-0606', 'BRKR-CHI-2'),
-('T-NAMR-0606-NA-002', 'NAMR', '2026-06-06', '2026-06-06 13:16:00', 'Commodities', 'XAU-AUG26-NA-0606', '2026-08-31', 'USD', 'SELL', 1000, 2350.0000, 'CP-NA-0606-B', 'ACCT-NA-0606-B', 'Metals Opportunity Fund', 'TRDR-327', 'Commodities', 'METALS-NA-0606', 'BRKR-CHI-2'),
-('T-NAMR-0607-CUM-BUY-1', 'NAMR', '2026-06-06', '2026-06-06 15:45:00', 'Currencies', 'NZD/USD-CUM-0607', '2026-06-14', 'USD', 'BUY', 5000000, 0.61000, 'CP-CUM-0607', 'ACCT-CUM-0607-A', 'Dawn Macro Fund', 'TRDR-237', 'FX', 'FX-CUM-0607-A', 'BRKR-SYD-2'),
-('T-NAMR-0607-CUM-BUY-2', 'NAMR', '2026-06-06', '2026-06-06 15:45:15', 'Currencies', 'NZD/USD-CUM-0607', '2026-06-14', 'USD', 'BUY', 4000000, 0.61000, 'CP-CUM-0607', 'ACCT-CUM-0607-A', 'Dawn Macro Fund', 'TRDR-237', 'FX', 'FX-CUM-0607-A', 'BRKR-SYD-2'),
-('T-NAMR-0607-OT-001', 'NAMR', '2026-06-07', '2026-06-07 09:24:00', 'Fixed Income', 'AGENCY-MBS-2031', '2031-01-25', 'USD', 'BUY', 1500000, 101.1000, 'CP-OT-0607', 'ACCT-OT-0607-A', 'Helios Income Fund', 'TRDR-107', 'Securitized Products', 'MBS-OT-0607', 'BRKR-NY-4'),
-('T-NAMR-0607-OT-002', 'NAMR', '2026-06-07', '2026-06-07 09:24:05', 'Fixed Income', 'AGENCY-MBS-2031', '2031-01-25', 'USD', 'SELL', 1490000, 101.1010, 'CP-OT-0607', 'ACCT-OT-0607-B', 'Helios Income Fund', 'TRDR-107', 'Securitized Products', 'MBS-OT-0607', 'BRKR-NY-4'),
-('T-NAMR-0607-CUM-SELL-1', 'NAMR', '2026-06-07', '2026-06-07 10:18:00', 'Currencies', 'NZD/USD-CUM-0607', '2026-06-14', 'USD', 'SELL', 4500000, 0.61010, 'CP-CUM-0607', 'ACCT-CUM-0607-B', 'Dawn Macro Fund', 'TRDR-238', 'FX', 'FX-CUM-0607-B', 'BRKR-SYD-2'),
-('T-NAMR-0607-CUM-SELL-2', 'NAMR', '2026-06-07', '2026-06-07 10:18:19', 'Currencies', 'NZD/USD-CUM-0607', '2026-06-14', 'USD', 'SELL', 4400000, 0.61010, 'CP-CUM-0607', 'ACCT-CUM-0607-B', 'Dawn Macro Fund', 'TRDR-238', 'FX', 'FX-CUM-0607-B', 'BRKR-SYD-2'),
-('T-NAMR-0607-NA-001', 'NAMR', '2026-06-07', '2026-06-07 13:05:00', 'Fixed Income', 'CORP-BETA-NA-0607', '2030-03-15', 'USD', 'BUY', 2000000, 100.5000, 'CP-NA-0607-A', 'ACCT-NA-0607-A', 'Pair Break Credit Fund', 'TRDR-337', 'Credit', 'CREDIT-NA-0607', 'BRKR-NY-5'),
-('T-NAMR-0607-NA-002', 'NAMR', '2026-06-07', '2026-06-07 13:05:06', 'Fixed Income', 'CORP-BETA-NA-0607', '2030-03-15', 'USD', 'SELL', 1990000, 100.5000, 'CP-NA-0607-B', 'ACCT-NA-0607-B', 'Pair Break Credit Fund', 'TRDR-338', 'Credit', 'CREDIT-NA-0607', 'BRKR-NY-5'),
-('T-NAMR-UST-001', 'NAMR', '2026-06-08', '2026-06-08 09:30:00', 'Fixed Income', 'UST-10Y', '2036-05-15', 'USD', 'BUY', 10000000, 99.8125, 'CP-ALPHA', 'ACCT-RATES-ALPHA', 'Alpha Capital Master Fund', 'TRDR-17', 'Rates', 'GOVT-RATES-A', 'BRKR-NY-1'),
-('T-NAMR-UST-002', 'NAMR', '2026-06-08', '2026-06-08 09:30:03', 'Fixed Income', 'UST-10Y', '2036-05-15', 'USD', 'SELL', 9980000, 99.8130, 'CP-ALPHA', 'ACCT-RATES-ALPHA', 'Alpha Capital Master Fund', 'TRDR-17', 'Rates', 'GOVT-RATES-A', 'BRKR-NY-1'),
-('T-NAMR-FX-001', 'NAMR', '2026-06-06', '2026-06-06 09:42:00', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'BUY', 3000000, 1.08450, 'CP-BETA', 'ACCT-FX-BETA', 'Beta Macro Fund', 'TRDR-42', 'FX', 'FX-SPOT-A', 'BRKR-LON-2'),
-('T-NAMR-FX-002', 'NAMR', '2026-06-07', '2026-06-07 09:42:10', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'BUY', 2000000, 1.08450, 'CP-BETA', 'ACCT-FX-BETA', 'Beta Macro Fund', 'TRDR-42', 'FX', 'FX-SPOT-A', 'BRKR-LON-2'),
-('T-NAMR-FX-003', 'NAMR', '2026-06-08', '2026-06-08 09:42:20', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'SELL', 2500000, 1.08495, 'CP-BETA', 'ACCT-FX-OMEGA', 'Omega Global Fund', 'TRDR-42', 'Macro FX', 'FX-SPOT-B', 'BRKR-NY-9'),
-('T-NAMR-FX-004', 'NAMR', '2026-06-08', '2026-06-08 09:42:30', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'SELL', 2450000, 1.08495, 'CP-BETA', 'ACCT-FX-OMEGA', 'Omega Global Fund', 'TRDR-42', 'Macro FX', 'FX-SPOT-B', 'BRKR-NY-9'),
-('T-NAMR-CMD-001', 'NAMR', '2026-06-08', '2026-06-08 10:30:00', 'Commodities', 'WTI-DEC26', '2026-12-20', 'USD', 'BUY', 1000, 75.00, 'CP-GAMMA', 'ACCT-CMD-GAMMA', 'Gamma Energy Fund', 'TRDR-88', 'Commodities', 'ENERGY-A', 'BRKR-HOU-4'),
-('T-NAMR-CMD-002', 'NAMR', '2026-06-08', '2026-06-08 10:40:00', 'Commodities', 'WTI-DEC26', '2026-12-20', 'USD', 'SELL', 1200, 76.00, 'CP-DELTA', 'ACCT-CMD-DELTA', 'Delta Physical Trading', 'TRDR-91', 'Commodities', 'ENERGY-B', 'BRKR-HOU-8'),
-('T-UST-001', 'APAC', '2026-06-08', '2026-06-08 09:30:00', 'Fixed Income', 'UST-10Y', '2036-05-15', 'USD', 'BUY', 10000000, 99.8125, 'CP-ALPHA', 'ACCT-RATES-ALPHA', 'Alpha Capital Master Fund', 'TRDR-17', 'Rates', 'GOVT-RATES-A', 'BRKR-NY-1'),
-('T-UST-002', 'APAC', '2026-06-08', '2026-06-08 09:30:03', 'Fixed Income', 'UST-10Y', '2036-05-15', 'USD', 'SELL', 9980000, 99.8130, 'CP-ALPHA', 'ACCT-RATES-ALPHA', 'Alpha Capital Master Fund', 'TRDR-17', 'Rates', 'GOVT-RATES-A', 'BRKR-NY-1'),
-('T-FX-001', 'APAC', '2026-06-06', '2026-06-06 09:42:00', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'BUY', 3000000, 1.08450, 'CP-BETA', 'ACCT-FX-BETA', 'Beta Macro Fund', 'TRDR-42', 'FX', 'FX-SPOT-A', 'BRKR-LON-2'),
-('T-FX-002', 'APAC', '2026-06-07', '2026-06-07 09:42:10', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'BUY', 2000000, 1.08450, 'CP-BETA', 'ACCT-FX-BETA', 'Beta Macro Fund', 'TRDR-42', 'FX', 'FX-SPOT-A', 'BRKR-LON-2'),
-('T-FX-003', 'APAC', '2026-06-08', '2026-06-08 09:42:20', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'SELL', 2500000, 1.08495, 'CP-BETA', 'ACCT-FX-OMEGA', 'Omega Global Fund', 'TRDR-42', 'Macro FX', 'FX-SPOT-B', 'BRKR-NY-9'),
-('T-FX-004', 'APAC', '2026-06-08', '2026-06-08 09:42:30', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'SELL', 2450000, 1.08495, 'CP-BETA', 'ACCT-FX-OMEGA', 'Omega Global Fund', 'TRDR-42', 'Macro FX', 'FX-SPOT-B', 'BRKR-NY-9'),
-('T-CMD-001', 'APAC', '2026-06-08', '2026-06-08 10:30:00', 'Commodities', 'WTI-DEC26', '2026-12-20', 'USD', 'BUY', 1000, 75.00, 'CP-GAMMA', 'ACCT-CMD-GAMMA', 'Gamma Energy Fund', 'TRDR-88', 'Commodities', 'ENERGY-A', 'BRKR-HOU-4'),
-('T-CMD-002', 'APAC', '2026-06-08', '2026-06-08 10:40:00', 'Commodities', 'WTI-DEC26', '2026-12-20', 'USD', 'SELL', 1200, 76.00, 'CP-DELTA', 'ACCT-CMD-DELTA', 'Delta Physical Trading', 'TRDR-91', 'Commodities', 'ENERGY-B', 'BRKR-HOU-8');
+('T-NAMR-0601-OT-001', 'NAMR', '2026-06-01', '2026-06-01 09:15:00', 'Fixed Income', 'UST-2Y-0601', '2028-06-30', 'USD', 'BUY', 2000000, 100.2500, 'CP-OT-0601', 'ACCT-OT-0601-A', 'Delta Rates Master Fund', 'TRDR-104', 'Rates', 'GOVT-OT-0601', 'BRKR-NY-1'),
+('T-NAMR-0601-OT-002', 'NAMR', '2026-06-01', '2026-06-01 09:15:04', 'Fixed Income', 'UST-2Y-0601', '2028-06-30', 'USD', 'SELL', 1990000, 100.2510, 'CP-OT-0601', 'ACCT-OT-0601-B', 'Delta Rates Master Fund', 'TRDR-104', 'Rates', 'GOVT-OT-0601', 'BRKR-NY-1'),
+('T-NAMR-0601-CUM-BUY-1', 'NAMR', '2026-06-01', '2026-06-01 10:00:00', 'Currencies', 'EUR/USD-CUM-0601', '2026-06-10', 'USD', 'BUY', 3000000, 1.10000, 'CP-CUM-0601', 'ACCT-CUM-0601-A', 'Aurora Macro Fund', 'TRDR-204', 'FX', 'FX-CUM-0601-A', 'BRKR-LON-1'),
+('T-NAMR-0601-CUM-BUY-2', 'NAMR', '2026-06-01', '2026-06-01 10:00:11', 'Currencies', 'EUR/USD-CUM-0601', '2026-06-10', 'USD', 'BUY', 2000000, 1.10000, 'CP-CUM-0601', 'ACCT-CUM-0601-A', 'Aurora Macro Fund', 'TRDR-204', 'FX', 'FX-CUM-0601-A', 'BRKR-LON-1'),
+('T-NAMR-0601-CUM-SELL-1', 'NAMR', '2026-06-01', '2026-06-01 10:00:25', 'Currencies', 'EUR/USD-CUM-0601', '2026-06-10', 'USD', 'SELL', 2500000, 1.10020, 'CP-CUM-0601', 'ACCT-CUM-0601-B', 'Aurora Macro Fund', 'TRDR-205', 'FX', 'FX-CUM-0601-B', 'BRKR-LON-1'),
+('T-NAMR-0601-CUM-SELL-2', 'NAMR', '2026-06-01', '2026-06-01 10:00:39', 'Currencies', 'EUR/USD-CUM-0601', '2026-06-10', 'USD', 'SELL', 2450000, 1.10020, 'CP-CUM-0601', 'ACCT-CUM-0601-B', 'Aurora Macro Fund', 'TRDR-205', 'FX', 'FX-CUM-0601-B', 'BRKR-LON-1'),
+('T-NAMR-0601-NA-001', 'NAMR', '2026-06-01', '2026-06-01 13:20:00', 'Commodities', 'WTI-DEC26-NA-0601', '2026-12-20', 'USD', 'BUY', 1000, 75.0000, 'CP-NA-0601', 'ACCT-NA-0601-A', 'Physical Energy Fund', 'TRDR-304', 'Commodities', 'ENERGY-NA-0601', 'BRKR-HOU-1'),
+('T-NAMR-0601-NA-002', 'NAMR', '2026-06-01', '2026-06-01 13:27:00', 'Commodities', 'WTI-DEC26-NA-0601', '2026-12-20', 'USD', 'SELL', 1800, 75.5000, 'CP-NA-0601', 'ACCT-NA-0601-B', 'Physical Energy Fund', 'TRDR-305', 'Commodities', 'ENERGY-NA-0601', 'BRKR-HOU-1'),
+('T-NAMR-0602-CUM-BUY-1', 'NAMR', '2026-06-01', '2026-06-01 15:10:00', 'Currencies', 'GBP/USD-CUM-0602', '2026-06-12', 'USD', 'BUY', 2000000, 1.26000, 'CP-CUM-0602', 'ACCT-CUM-0602-A', 'Boreal Macro Fund', 'TRDR-215', 'FX', 'FX-CUM-0602-A', 'BRKR-LON-2'),
+('T-NAMR-0602-OT-001', 'NAMR', '2026-06-02', '2026-06-02 09:18:00', 'Fixed Income', 'CORP-ALPHA-2029', '2029-09-15', 'USD', 'BUY', 2500000, 101.2500, 'CP-OT-0602', 'ACCT-OT-0602-A', 'Orion Credit Fund', 'TRDR-105', 'Credit', 'CREDIT-OT-0602', 'BRKR-NY-2'),
+('T-NAMR-0602-OT-002', 'NAMR', '2026-06-02', '2026-06-02 09:18:05', 'Fixed Income', 'CORP-ALPHA-2029', '2029-09-15', 'USD', 'SELL', 2490000, 101.2510, 'CP-OT-0602', 'ACCT-OT-0602-B', 'Orion Credit Fund', 'TRDR-105', 'Credit', 'CREDIT-OT-0602', 'BRKR-NY-2'),
+('T-NAMR-0602-CUM-BUY-2', 'NAMR', '2026-06-02', '2026-06-02 10:05:00', 'Currencies', 'GBP/USD-CUM-0602', '2026-06-12', 'USD', 'BUY', 3000000, 1.26000, 'CP-CUM-0602', 'ACCT-CUM-0602-A', 'Boreal Macro Fund', 'TRDR-215', 'FX', 'FX-CUM-0602-A', 'BRKR-LON-2'),
+('T-NAMR-0602-CUM-SELL-1', 'NAMR', '2026-06-02', '2026-06-02 10:05:18', 'Currencies', 'GBP/USD-CUM-0602', '2026-06-12', 'USD', 'SELL', 2500000, 1.26010, 'CP-CUM-0602', 'ACCT-CUM-0602-B', 'Boreal Macro Fund', 'TRDR-216', 'FX', 'FX-CUM-0602-B', 'BRKR-LON-2'),
+('T-NAMR-0602-CUM-SELL-2', 'NAMR', '2026-06-02', '2026-06-02 10:05:36', 'Currencies', 'GBP/USD-CUM-0602', '2026-06-12', 'USD', 'SELL', 2450000, 1.26010, 'CP-CUM-0602', 'ACCT-CUM-0602-B', 'Boreal Macro Fund', 'TRDR-216', 'FX', 'FX-CUM-0602-B', 'BRKR-LON-2'),
+('T-NAMR-0602-NA-001', 'NAMR', '2026-06-02', '2026-06-02 14:00:00', 'Fixed Income', 'UST-5Y-NA-0602', '2031-06-30', 'USD', 'BUY', 5000000, 99.0000, 'CP-NA-0602', 'ACCT-NA-0602-A', 'Mismatch Rates Fund', 'TRDR-315', 'Rates', 'RATES-NA-0602', 'BRKR-CHI-1'),
+('T-NAMR-0602-NA-002', 'NAMR', '2026-06-02', '2026-06-02 14:00:09', 'Fixed Income', 'UST-5Y-NA-0602', '2031-06-30', 'USD', 'SELL', 4000000, 99.0000, 'CP-NA-0602', 'ACCT-NA-0602-B', 'Mismatch Rates Fund', 'TRDR-316', 'Rates', 'RATES-NA-0602', 'BRKR-CHI-1'),
+('T-NAMR-0603-CUM-BUY-1', 'NAMR', '2026-06-02', '2026-06-02 15:05:00', 'Currencies', 'AUD/USD-CUM-0603', '2026-06-13', 'USD', 'BUY', 5000000, 0.66000, 'CP-CUM-0603', 'ACCT-CUM-0603-A', 'Cascade Macro Fund', 'TRDR-226', 'FX', 'FX-CUM-0603-A', 'BRKR-SYD-1'),
+('T-NAMR-0603-CUM-BUY-2', 'NAMR', '2026-06-02', '2026-06-02 15:05:12', 'Currencies', 'AUD/USD-CUM-0603', '2026-06-13', 'USD', 'BUY', 4000000, 0.66000, 'CP-CUM-0603', 'ACCT-CUM-0603-A', 'Cascade Macro Fund', 'TRDR-226', 'FX', 'FX-CUM-0603-A', 'BRKR-SYD-1'),
+('T-NAMR-0603-OT-001', 'NAMR', '2026-06-03', '2026-06-03 09:21:00', 'Fixed Income', 'UST-5Y-0603', '2031-06-30', 'USD', 'BUY', 5000000, 98.5000, 'CP-OT-0603', 'ACCT-OT-0603-A', 'Northstar Rates Fund', 'TRDR-106', 'Rates', 'GOVT-OT-0603', 'BRKR-NY-3'),
+('T-NAMR-0603-OT-002', 'NAMR', '2026-06-03', '2026-06-03 09:21:04', 'Fixed Income', 'UST-5Y-0603', '2031-06-30', 'USD', 'SELL', 4980000, 98.5010, 'CP-OT-0603', 'ACCT-OT-0603-B', 'Northstar Rates Fund', 'TRDR-106', 'Rates', 'GOVT-OT-0603', 'BRKR-NY-3'),
+('T-NAMR-0603-CUM-SELL-1', 'NAMR', '2026-06-03', '2026-06-03 10:12:00', 'Currencies', 'AUD/USD-CUM-0603', '2026-06-13', 'USD', 'SELL', 4500000, 0.66010, 'CP-CUM-0603', 'ACCT-CUM-0603-B', 'Cascade Macro Fund', 'TRDR-227', 'FX', 'FX-CUM-0603-B', 'BRKR-SYD-1'),
+('T-NAMR-0603-CUM-SELL-2', 'NAMR', '2026-06-03', '2026-06-03 10:12:17', 'Currencies', 'AUD/USD-CUM-0603', '2026-06-13', 'USD', 'SELL', 4400000, 0.66010, 'CP-CUM-0603', 'ACCT-CUM-0603-B', 'Cascade Macro Fund', 'TRDR-227', 'FX', 'FX-CUM-0603-B', 'BRKR-SYD-1'),
+('T-NAMR-0603-NA-001', 'NAMR', '2026-06-03', '2026-06-03 13:15:00', 'Commodities', 'XAU-AUG26-NA-0603', '2026-08-31', 'USD', 'BUY', 1000, 2350.0000, 'CP-NA-0603-A', 'ACCT-NA-0603-A', 'Metals Opportunity Fund', 'TRDR-326', 'Commodities', 'METALS-NA-0603', 'BRKR-CHI-2'),
+('T-NAMR-0603-NA-002', 'NAMR', '2026-06-03', '2026-06-03 13:16:00', 'Commodities', 'XAU-AUG26-NA-0603', '2026-08-31', 'USD', 'SELL', 1000, 2350.0000, 'CP-NA-0603-B', 'ACCT-NA-0603-B', 'Metals Opportunity Fund', 'TRDR-327', 'Commodities', 'METALS-NA-0603', 'BRKR-CHI-2'),
+('T-NAMR-0604-CUM-BUY-1', 'NAMR', '2026-06-03', '2026-06-03 15:45:00', 'Currencies', 'NZD/USD-CUM-0604', '2026-06-14', 'USD', 'BUY', 5000000, 0.61000, 'CP-CUM-0604', 'ACCT-CUM-0604-A', 'Dawn Macro Fund', 'TRDR-237', 'FX', 'FX-CUM-0604-A', 'BRKR-SYD-2'),
+('T-NAMR-0604-CUM-BUY-2', 'NAMR', '2026-06-03', '2026-06-03 15:45:15', 'Currencies', 'NZD/USD-CUM-0604', '2026-06-14', 'USD', 'BUY', 4000000, 0.61000, 'CP-CUM-0604', 'ACCT-CUM-0604-A', 'Dawn Macro Fund', 'TRDR-237', 'FX', 'FX-CUM-0604-A', 'BRKR-SYD-2'),
+('T-NAMR-0604-OT-001', 'NAMR', '2026-06-04', '2026-06-04 09:24:00', 'Fixed Income', 'AGENCY-MBS-2031', '2031-01-25', 'USD', 'BUY', 1500000, 101.1000, 'CP-OT-0604', 'ACCT-OT-0604-A', 'Helios Income Fund', 'TRDR-107', 'Securitized Products', 'MBS-OT-0604', 'BRKR-NY-4'),
+('T-NAMR-0604-OT-002', 'NAMR', '2026-06-04', '2026-06-04 09:24:05', 'Fixed Income', 'AGENCY-MBS-2031', '2031-01-25', 'USD', 'SELL', 1490000, 101.1010, 'CP-OT-0604', 'ACCT-OT-0604-B', 'Helios Income Fund', 'TRDR-107', 'Securitized Products', 'MBS-OT-0604', 'BRKR-NY-4'),
+('T-NAMR-0604-CUM-SELL-1', 'NAMR', '2026-06-04', '2026-06-04 10:18:00', 'Currencies', 'NZD/USD-CUM-0604', '2026-06-14', 'USD', 'SELL', 4500000, 0.61010, 'CP-CUM-0604', 'ACCT-CUM-0604-B', 'Dawn Macro Fund', 'TRDR-238', 'FX', 'FX-CUM-0604-B', 'BRKR-SYD-2'),
+('T-NAMR-0604-CUM-SELL-2', 'NAMR', '2026-06-04', '2026-06-04 10:18:19', 'Currencies', 'NZD/USD-CUM-0604', '2026-06-14', 'USD', 'SELL', 4400000, 0.61010, 'CP-CUM-0604', 'ACCT-CUM-0604-B', 'Dawn Macro Fund', 'TRDR-238', 'FX', 'FX-CUM-0604-B', 'BRKR-SYD-2'),
+('T-NAMR-0604-NA-001', 'NAMR', '2026-06-04', '2026-06-04 13:05:00', 'Fixed Income', 'CORP-BETA-NA-0604', '2030-03-15', 'USD', 'BUY', 2000000, 100.5000, 'CP-NA-0604-A', 'ACCT-NA-0604-A', 'Pair Break Credit Fund', 'TRDR-337', 'Credit', 'CREDIT-NA-0604', 'BRKR-NY-5'),
+('T-NAMR-0604-NA-002', 'NAMR', '2026-06-04', '2026-06-04 13:05:06', 'Fixed Income', 'CORP-BETA-NA-0604', '2030-03-15', 'USD', 'SELL', 1990000, 100.5000, 'CP-NA-0604-B', 'ACCT-NA-0604-B', 'Pair Break Credit Fund', 'TRDR-338', 'Credit', 'CREDIT-NA-0604', 'BRKR-NY-5'),
+('T-NAMR-UST-001', 'NAMR', '2026-06-05', '2026-06-05 09:30:00', 'Fixed Income', 'UST-10Y', '2036-05-15', 'USD', 'BUY', 10000000, 99.8125, 'CP-ALPHA', 'ACCT-RATES-ALPHA', 'Alpha Capital Master Fund', 'TRDR-17', 'Rates', 'GOVT-RATES-A', 'BRKR-NY-1'),
+('T-NAMR-UST-002', 'NAMR', '2026-06-05', '2026-06-05 09:30:03', 'Fixed Income', 'UST-10Y', '2036-05-15', 'USD', 'SELL', 9980000, 99.8130, 'CP-ALPHA', 'ACCT-RATES-ALPHA', 'Alpha Capital Master Fund', 'TRDR-17', 'Rates', 'GOVT-RATES-A', 'BRKR-NY-1'),
+('T-NAMR-FX-001', 'NAMR', '2026-06-03', '2026-06-03 09:42:00', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'BUY', 3000000, 1.08450, 'CP-BETA', 'ACCT-FX-BETA', 'Beta Macro Fund', 'TRDR-42', 'FX', 'FX-SPOT-A', 'BRKR-LON-2'),
+('T-NAMR-FX-002', 'NAMR', '2026-06-04', '2026-06-04 09:42:10', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'BUY', 2000000, 1.08450, 'CP-BETA', 'ACCT-FX-BETA', 'Beta Macro Fund', 'TRDR-42', 'FX', 'FX-SPOT-A', 'BRKR-LON-2'),
+('T-NAMR-FX-003', 'NAMR', '2026-06-05', '2026-06-05 09:42:20', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'SELL', 2500000, 1.08495, 'CP-BETA', 'ACCT-FX-OMEGA', 'Omega Global Fund', 'TRDR-42', 'Macro FX', 'FX-SPOT-B', 'BRKR-NY-9'),
+('T-NAMR-FX-004', 'NAMR', '2026-06-05', '2026-06-05 09:42:30', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'SELL', 2450000, 1.08495, 'CP-BETA', 'ACCT-FX-OMEGA', 'Omega Global Fund', 'TRDR-42', 'Macro FX', 'FX-SPOT-B', 'BRKR-NY-9'),
+('T-NAMR-CMD-001', 'NAMR', '2026-06-05', '2026-06-05 10:30:00', 'Commodities', 'WTI-DEC26', '2026-12-20', 'USD', 'BUY', 1000, 75.00, 'CP-GAMMA', 'ACCT-CMD-GAMMA', 'Gamma Energy Fund', 'TRDR-88', 'Commodities', 'ENERGY-A', 'BRKR-HOU-4'),
+('T-NAMR-CMD-002', 'NAMR', '2026-06-05', '2026-06-05 10:40:00', 'Commodities', 'WTI-DEC26', '2026-12-20', 'USD', 'SELL', 1200, 76.00, 'CP-DELTA', 'ACCT-CMD-DELTA', 'Delta Physical Trading', 'TRDR-91', 'Commodities', 'ENERGY-B', 'BRKR-HOU-8'),
+('T-UST-001', 'APAC', '2026-06-05', '2026-06-05 09:30:00', 'Fixed Income', 'UST-10Y', '2036-05-15', 'USD', 'BUY', 10000000, 99.8125, 'CP-ALPHA', 'ACCT-RATES-ALPHA', 'Alpha Capital Master Fund', 'TRDR-17', 'Rates', 'GOVT-RATES-A', 'BRKR-NY-1'),
+('T-UST-002', 'APAC', '2026-06-05', '2026-06-05 09:30:03', 'Fixed Income', 'UST-10Y', '2036-05-15', 'USD', 'SELL', 9980000, 99.8130, 'CP-ALPHA', 'ACCT-RATES-ALPHA', 'Alpha Capital Master Fund', 'TRDR-17', 'Rates', 'GOVT-RATES-A', 'BRKR-NY-1'),
+('T-FX-001', 'APAC', '2026-06-03', '2026-06-03 09:42:00', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'BUY', 3000000, 1.08450, 'CP-BETA', 'ACCT-FX-BETA', 'Beta Macro Fund', 'TRDR-42', 'FX', 'FX-SPOT-A', 'BRKR-LON-2'),
+('T-FX-002', 'APAC', '2026-06-04', '2026-06-04 09:42:10', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'BUY', 2000000, 1.08450, 'CP-BETA', 'ACCT-FX-BETA', 'Beta Macro Fund', 'TRDR-42', 'FX', 'FX-SPOT-A', 'BRKR-LON-2'),
+('T-FX-003', 'APAC', '2026-06-05', '2026-06-05 09:42:20', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'SELL', 2500000, 1.08495, 'CP-BETA', 'ACCT-FX-OMEGA', 'Omega Global Fund', 'TRDR-42', 'Macro FX', 'FX-SPOT-B', 'BRKR-NY-9'),
+('T-FX-004', 'APAC', '2026-06-05', '2026-06-05 09:42:30', 'Currencies', 'EUR/USD-SPOT', '2026-06-10', 'USD', 'SELL', 2450000, 1.08495, 'CP-BETA', 'ACCT-FX-OMEGA', 'Omega Global Fund', 'TRDR-42', 'Macro FX', 'FX-SPOT-B', 'BRKR-NY-9'),
+('T-CMD-001', 'APAC', '2026-06-05', '2026-06-05 10:30:00', 'Commodities', 'WTI-DEC26', '2026-12-20', 'USD', 'BUY', 1000, 75.00, 'CP-GAMMA', 'ACCT-CMD-GAMMA', 'Gamma Energy Fund', 'TRDR-88', 'Commodities', 'ENERGY-A', 'BRKR-HOU-4'),
+('T-CMD-002', 'APAC', '2026-06-05', '2026-06-05 10:40:00', 'Commodities', 'WTI-DEC26', '2026-12-20', 'USD', 'SELL', 1200, 76.00, 'CP-DELTA', 'ACCT-CMD-DELTA', 'Delta Physical Trading', 'TRDR-91', 'Commodities', 'ENERGY-B', 'BRKR-HOU-8');
 
 DELIMITER //
 
@@ -458,6 +483,7 @@ END//
 CREATE PROCEDURE sp_insert_ficc_wash_alert_history(
     IN p_alert_fingerprint CHAR(64),
     IN p_alert_id VARCHAR(80),
+    IN p_request_id BIGINT,
     IN p_appid INT,
     IN p_modelid INT,
     IN p_region VARCHAR(10),
@@ -474,6 +500,7 @@ BEGIN
     INSERT INTO ficc_wash_alert_history (
         alert_fingerprint,
         alert_id,
+        request_id,
         appid,
         modelid,
         region,
@@ -488,6 +515,7 @@ BEGIN
     ) VALUES (
         p_alert_fingerprint,
         p_alert_id,
+        p_request_id,
         p_appid,
         p_modelid,
         UPPER(p_region),
@@ -584,6 +612,7 @@ BEGIN
     SELECT
         alert_history_id,
         alert_id,
+        request_id,
         appid,
         modelid,
         region,
@@ -655,6 +684,33 @@ BEGIN
       AND enabled = TRUE;
 END//
 
+CREATE PROCEDURE sp_update_surveillance_model_threshold(
+    IN p_appid INT,
+    IN p_modelid INT,
+    IN p_region VARCHAR(10),
+    IN p_threshold_name VARCHAR(80),
+    IN p_threshold_value DECIMAL(22, 6),
+    IN p_lookup_days INT
+)
+BEGIN
+    UPDATE surveillance_model_threshold
+    SET threshold_value = p_threshold_value,
+        lookup_days = p_lookup_days
+    WHERE appid = p_appid
+      AND modelid = p_modelid
+      AND region = UPPER(p_region)
+      AND threshold_name = UPPER(p_threshold_name)
+      AND enabled = TRUE;
+
+    SELECT COUNT(*) AS threshold_count
+    FROM surveillance_model_threshold
+    WHERE appid = p_appid
+      AND modelid = p_modelid
+      AND region = UPPER(p_region)
+      AND threshold_name = UPPER(p_threshold_name)
+      AND enabled = TRUE;
+END//
+
 CREATE PROCEDURE sp_get_ficc_trades(
     IN p_appid INT,
     IN p_modelid INT,
@@ -662,6 +718,17 @@ CREATE PROCEDURE sp_get_ficc_trades(
     IN p_business_date DATE
 )
 BEGIN
+    DECLARE v_model_region VARCHAR(20);
+    DECLARE v_trade_region VARCHAR(20);
+
+    SET v_model_region = UPPER(p_region);
+    SET v_trade_region = CASE v_model_region
+        WHEN 'NAMRC' THEN 'NAMR'
+        WHEN 'EMEAC' THEN 'EMEA'
+        WHEN 'APACC' THEN 'APAC'
+        ELSE v_model_region
+    END;
+
     SELECT
         trade.trade_id,
         trade.trade_timestamp,
@@ -683,10 +750,10 @@ BEGIN
     JOIN surveillance_model_threshold threshold
       ON threshold.appid = p_appid
      AND threshold.modelid = p_modelid
-     AND threshold.region = UPPER(p_region)
+     AND threshold.region = v_model_region
      AND threshold.threshold_name = 'CUMULATIVE_MIN_TOTAL_AMOUNT'
      AND threshold.enabled = TRUE
-    WHERE trade.region = UPPER(p_region)
+    WHERE trade.region = v_trade_region
       AND trade.trade_date BETWEEN DATE_SUB(p_business_date, INTERVAL threshold.lookup_days DAY)
                                AND p_business_date
     ORDER BY trade.trade_timestamp, trade.trade_id;

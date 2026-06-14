@@ -97,7 +97,7 @@ h3 {
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -160,6 +160,33 @@ h3 {
 .run-form select:focus {
   border-color: #167d86;
   box-shadow: 0 0 0 3px rgba(22, 125, 134, 0.16);
+}
+
+.run-form input[readonly] {
+  background: #eef2f3;
+  color: #45646b;
+}
+
+.threshold-fieldset {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #d8e1e3;
+  border-radius: 8px;
+}
+
+.threshold-fieldset legend {
+  padding: 0 6px;
+  color: #34484e;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.threshold-fieldset label:last-child {
+  grid-column: 1 / -1;
 }
 
 .form-actions {
@@ -460,6 +487,7 @@ h3 {
 
   .content-grid,
   .run-form,
+  .threshold-fieldset,
   .form-actions,
   .status-message dl,
   .result-grid,

@@ -48,7 +48,17 @@ class FiccRunRequestWorkerTest {
                 .thenReturn(Optional.of(firstRequest))
                 .thenReturn(Optional.of(secondRequest))
                 .thenReturn(Optional.empty());
-        when(surveillanceApplication.run(firstRequest.appId(), firstRequest.region(), firstRequest.businessDate()))
+        when(surveillanceApplication.run(
+                firstRequest.requestId(),
+                firstRequest.appId(),
+                firstRequest.region(),
+                firstRequest.businessDate()))
+                .thenReturn(summary);
+        when(surveillanceApplication.run(
+                secondRequest.requestId(),
+                secondRequest.appId(),
+                secondRequest.region(),
+                secondRequest.businessDate()))
                 .thenReturn(summary);
 
         FiccRunRequestWorker worker = new FiccRunRequestWorker(surveillanceApplication, runRequestRepository);
@@ -56,8 +66,10 @@ class FiccRunRequestWorkerTest {
         worker.run();
 
         verify(runRequestRepository, times(3)).claimNextRunnableRequest();
-        verify(surveillanceApplication, times(2))
-                .run(firstRequest.appId(), firstRequest.region(), firstRequest.businessDate());
+        verify(surveillanceApplication)
+                .run(firstRequest.requestId(), firstRequest.appId(), firstRequest.region(), firstRequest.businessDate());
+        verify(surveillanceApplication)
+                .run(secondRequest.requestId(), secondRequest.appId(), secondRequest.region(), secondRequest.businessDate());
         verify(runRequestRepository).markCompleted(firstRequest, summary);
         verify(runRequestRepository).markCompleted(secondRequest, summary);
     }
@@ -88,9 +100,17 @@ class FiccRunRequestWorkerTest {
                 .thenReturn(Optional.of(failedRequest))
                 .thenReturn(Optional.of(nextRequest))
                 .thenReturn(Optional.empty());
-        when(surveillanceApplication.run(failedRequest.appId(), failedRequest.region(), failedRequest.businessDate()))
+        when(surveillanceApplication.run(
+                failedRequest.requestId(),
+                failedRequest.appId(),
+                failedRequest.region(),
+                failedRequest.businessDate()))
                 .thenThrow(failure);
-        when(surveillanceApplication.run(nextRequest.appId(), nextRequest.region(), nextRequest.businessDate()))
+        when(surveillanceApplication.run(
+                nextRequest.requestId(),
+                nextRequest.appId(),
+                nextRequest.region(),
+                nextRequest.businessDate()))
                 .thenReturn(summary);
 
         FiccRunRequestWorker worker = new FiccRunRequestWorker(surveillanceApplication, runRequestRepository);

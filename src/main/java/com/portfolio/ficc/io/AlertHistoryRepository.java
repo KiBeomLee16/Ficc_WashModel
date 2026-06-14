@@ -30,7 +30,7 @@ public class AlertHistoryRepository {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AlertHistoryRepository.class);
 
-    private static final String INSERT_ALERT_HISTORY_CALL = "{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
+    private static final String INSERT_ALERT_HISTORY_CALL = "{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
     private static final String INSERT_ALERT_HISTORY_TRADE_CALL = "{CALL sp_insert_ficc_wash_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
     private static final String FIND_ALERT_HISTORY_CALL = "{CALL sp_find_ficc_wash_alert_history(?, ?, ?)}";
     private static final String DELETE_ALERT_HISTORY_CALL = "{CALL sp_delete_ficc_wash_alert_history_for_run(?, ?, ?, ?)}";
@@ -41,7 +41,10 @@ public class AlertHistoryRepository {
         this.databaseConfig = Objects.requireNonNull(databaseConfig, "databaseConfig is required");
     }
 
-    public boolean saveIfNew(ModelConfig modelConfig, LocalDate businessDate, Alert alert, String alertPayload) {
+    public boolean saveIfNew(long requestId, ModelConfig modelConfig, LocalDate businessDate, Alert alert, String alertPayload) {
+        if (requestId <= 0) {
+            throw new IllegalArgumentException("requestId must be positive");
+        }
         Objects.requireNonNull(modelConfig, "modelConfig is required");
         Objects.requireNonNull(businessDate, "businessDate is required");
         Objects.requireNonNull(alert, "alert is required");
@@ -58,6 +61,7 @@ public class AlertHistoryRepository {
                 connection.setAutoCommit(false);
                 long alertHistoryId = insertAlertHistory(
                         connection,
+                        requestId,
                         modelConfig,
                         businessDate,
                         alert,
@@ -69,8 +73,9 @@ public class AlertHistoryRepository {
                 );
                 insertAlertHistoryTrades(connection, alertHistoryId, alert);
                 connection.commit();
-                LOGGER.info("Saved alert history: alertHistoryId={}, alertId={}, matchType={}, relatedTrades={}, appid={}, modelid={}, region={}, businessDate={}.",
+                LOGGER.info("Saved alert history: alertHistoryId={}, requestId={}, alertId={}, matchType={}, relatedTrades={}, appid={}, modelid={}, region={}, businessDate={}.",
                         alertHistoryId,
+                        requestId,
                         alert.alertId(),
                         alert.matchType(),
                         alert.relatedTrades().size(),
@@ -175,6 +180,7 @@ public class AlertHistoryRepository {
 
     private long insertAlertHistory(
             Connection connection,
+            long requestId,
             ModelConfig modelConfig,
             LocalDate businessDate,
             Alert alert,
@@ -187,17 +193,18 @@ public class AlertHistoryRepository {
         try (CallableStatement statement = connection.prepareCall(INSERT_ALERT_HISTORY_CALL)) {
             statement.setString(1, alertFingerprint);
             statement.setString(2, alert.alertId());
-            statement.setInt(3, modelConfig.appId());
-            statement.setInt(4, modelConfig.modelId());
-            statement.setString(5, modelConfig.region());
-            statement.setString(6, alert.alertType());
-            statement.setString(7, alert.matchType());
-            statement.setDate(8, Date.valueOf(businessDate));
-            statement.setDate(9, Date.valueOf(firstTradeDate));
-            statement.setDate(10, Date.valueOf(lastTradeDate));
-            statement.setString(11, relatedTradeIds);
-            statement.setString(12, alertPayload);
-            statement.setString(13, "DISPATCHED");
+            statement.setLong(3, requestId);
+            statement.setInt(4, modelConfig.appId());
+            statement.setInt(5, modelConfig.modelId());
+            statement.setString(6, modelConfig.region());
+            statement.setString(7, alert.alertType());
+            statement.setString(8, alert.matchType());
+            statement.setDate(9, Date.valueOf(businessDate));
+            statement.setDate(10, Date.valueOf(firstTradeDate));
+            statement.setDate(11, Date.valueOf(lastTradeDate));
+            statement.setString(12, relatedTradeIds);
+            statement.setString(13, alertPayload);
+            statement.setString(14, "DISPATCHED");
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
@@ -251,6 +258,7 @@ public class AlertHistoryRepository {
         return new AlertHistoryResult(
                 resultSet.getLong("alert_history_id"),
                 resultSet.getString("alert_id"),
+                resultSet.getLong("request_id"),
                 resultSet.getInt("appid"),
                 resultSet.getInt("modelid"),
                 resultSet.getString("region"),

@@ -72,12 +72,13 @@ class AlertHistoryRepositoryTest {
 
     @Test
     void saveIfNewPersistsAlertHistoryAndDrillOutRowsAndReturnsTrue() throws Exception {
+        long requestId = 18L;
         LocalDate businessDate = LocalDate.of(2026, 6, 8);
         Alert alert = cumulativeAlert();
         String alertPayload = "{\"alertId\":\"ficc_wash_alert_1\"}";
 
         when(connection.getAutoCommit()).thenReturn(true);
-        when(connection.prepareCall("{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
+        when(connection.prepareCall("{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
                 .thenReturn(historyStatement);
         when(historyStatement.executeQuery()).thenReturn(generatedKeys);
         when(generatedKeys.next()).thenReturn(true);
@@ -88,7 +89,7 @@ class AlertHistoryRepositoryTest {
 
         AlertHistoryRepository repository = new ConnectionBackedAlertHistoryRepository(connection);
 
-        boolean saved = repository.saveIfNew(MODEL_CONFIG, businessDate, alert, alertPayload);
+        boolean saved = repository.saveIfNew(requestId, MODEL_CONFIG, businessDate, alert, alertPayload);
 
         assertTrue(saved);
 
@@ -96,17 +97,18 @@ class AlertHistoryRepositoryTest {
         verify(historyStatement).setString(eq(1), fingerprintCaptor.capture());
         assertEquals(64, fingerprintCaptor.getValue().length());
         verify(historyStatement).setString(2, "ficc_wash_alert_1");
-        verify(historyStatement).setInt(3, 1);
+        verify(historyStatement).setLong(3, requestId);
         verify(historyStatement).setInt(4, 1);
-        verify(historyStatement).setString(5, "NAMR");
-        verify(historyStatement).setString(6, "FICC_WASH_TRADE");
-        verify(historyStatement).setString(7, "CUMULATIVE_TRANSACTION");
-        verify(historyStatement).setDate(8, Date.valueOf(businessDate));
-        verify(historyStatement).setDate(9, Date.valueOf(LocalDate.of(2026, 6, 7)));
-        verify(historyStatement).setDate(10, Date.valueOf(LocalDate.of(2026, 6, 8)));
-        verify(historyStatement).setString(11, "T-CUM-BUY-1,T-CUM-SELL-1");
-        verify(historyStatement).setString(12, alertPayload);
-        verify(historyStatement).setString(13, "DISPATCHED");
+        verify(historyStatement).setInt(5, 1);
+        verify(historyStatement).setString(6, "NAMR");
+        verify(historyStatement).setString(7, "FICC_WASH_TRADE");
+        verify(historyStatement).setString(8, "CUMULATIVE_TRANSACTION");
+        verify(historyStatement).setDate(9, Date.valueOf(businessDate));
+        verify(historyStatement).setDate(10, Date.valueOf(LocalDate.of(2026, 6, 7)));
+        verify(historyStatement).setDate(11, Date.valueOf(LocalDate.of(2026, 6, 8)));
+        verify(historyStatement).setString(12, "T-CUM-BUY-1,T-CUM-SELL-1");
+        verify(historyStatement).setString(13, alertPayload);
+        verify(historyStatement).setString(14, "DISPATCHED");
         verify(historyStatement).executeQuery();
 
         ArgumentCaptor<Integer> sequenceCaptor = ArgumentCaptor.forClass(Integer.class);
@@ -139,17 +141,18 @@ class AlertHistoryRepositoryTest {
 
     @Test
     void saveIfNewReturnsFalseWhenDuplicateHistoryExists() throws Exception {
+        long requestId = 18L;
         Alert alert = cumulativeAlert();
         String alertPayload = "{\"alertId\":\"ficc_wash_alert_1\"}";
 
         when(connection.getAutoCommit()).thenReturn(true);
-        when(connection.prepareCall("{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
+        when(connection.prepareCall("{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
                 .thenReturn(historyStatement);
         when(historyStatement.executeQuery()).thenThrow(new SQLIntegrityConstraintViolationException("duplicate"));
 
         AlertHistoryRepository repository = new ConnectionBackedAlertHistoryRepository(connection);
 
-        boolean saved = repository.saveIfNew(MODEL_CONFIG, LocalDate.of(2026, 6, 9), alert, alertPayload);
+        boolean saved = repository.saveIfNew(requestId, MODEL_CONFIG, LocalDate.of(2026, 6, 9), alert, alertPayload);
 
         assertFalse(saved);
         verify(connection).rollback();
@@ -165,6 +168,7 @@ class AlertHistoryRepositoryTest {
         when(searchStatement.executeQuery()).thenReturn(searchResultSet);
         when(searchResultSet.next()).thenReturn(true).thenReturn(false);
         when(searchResultSet.getLong("alert_history_id")).thenReturn(11L);
+        when(searchResultSet.getLong("request_id")).thenReturn(18L);
         when(searchResultSet.getString("alert_id")).thenReturn("ficc_wash_alert_11");
         when(searchResultSet.getInt("appid")).thenReturn(3);
         when(searchResultSet.getInt("modelid")).thenReturn(1);
@@ -189,6 +193,7 @@ class AlertHistoryRepositoryTest {
 
         assertEquals(1, results.size());
         assertEquals(11L, results.get(0).alertHistoryId());
+        assertEquals(18L, results.get(0).requestId());
         assertEquals("ficc_wash_alert_11", results.get(0).alertId());
         assertEquals(3, results.get(0).appId());
         assertEquals("APAC", results.get(0).region());

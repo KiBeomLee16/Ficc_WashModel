@@ -29,18 +29,19 @@ class AlertDispatcherTest {
 
     @Test
     void dispatchStoresAlertPayloadInHistoryDb() {
+        long requestId = 18L;
         ModelConfig modelConfig = modelConfig();
         LocalDate businessDate = LocalDate.of(2026, 6, 8);
         Alert alert = alert();
         String payload = "{\"alertId\":\"ficc_wash_alert_1\"}";
-        when(alertHistoryRepository.saveIfNew(modelConfig, businessDate, alert, payload)).thenReturn(true);
+        when(alertHistoryRepository.saveIfNew(requestId, modelConfig, businessDate, alert, payload)).thenReturn(true);
 
         AlertDispatcher dispatcher = new AlertDispatcher(alertHistoryRepository);
 
-        boolean dispatched = dispatcher.dispatch(modelConfig, businessDate, alert, payload);
+        boolean dispatched = dispatcher.dispatch(requestId, modelConfig, businessDate, alert, payload);
 
         assertTrue(dispatched);
-        verify(alertHistoryRepository).saveIfNew(modelConfig, businessDate, alert, payload);
+        verify(alertHistoryRepository).saveIfNew(requestId, modelConfig, businessDate, alert, payload);
     }
 
     @Test
@@ -49,7 +50,7 @@ class AlertDispatcherTest {
 
         NullPointerException exception = assertThrows(
                 NullPointerException.class,
-                () -> dispatcher.dispatch(modelConfig(), LocalDate.of(2026, 6, 8), alert(), null)
+                () -> dispatcher.dispatch(18L, modelConfig(), LocalDate.of(2026, 6, 8), alert(), null)
         );
 
         assertEquals("alertPayload is required", exception.getMessage());

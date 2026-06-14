@@ -34,6 +34,7 @@ class AlertHistoryControllerTest {
         AlertHistoryResult alert = new AlertHistoryResult(
                 11,
                 "ficc_wash_alert_11",
+                18,
                 3,
                 1,
                 "APAC",
@@ -80,6 +81,7 @@ class AlertHistoryControllerTest {
         assertEquals(1, response.getBody().runRequests().size());
         assertEquals(18L, response.getBody().runRequests().get(0).requestId());
         assertEquals("ficc_wash_alert_11", response.getBody().alerts().get(0).alertId());
+        assertEquals(18L, response.getBody().alerts().get(0).requestId());
 
         verify(alertHistoryRepository).findByRunCriteria(3, "APAC", businessDate);
         verify(runRequestRepository).findByRunCriteria(3, "APAC", businessDate);

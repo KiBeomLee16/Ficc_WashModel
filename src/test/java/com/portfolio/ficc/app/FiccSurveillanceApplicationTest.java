@@ -30,6 +30,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -55,6 +56,7 @@ class FiccSurveillanceApplicationTest {
 
     @Test
     void runExecutesSelectedModelPipelineInSeparateSteps() {
+        long requestId = 18L;
         ModelConfig modelConfig = modelConfig("FICC_WASH_TRADE");
         LocalDate businessDate = LocalDate.of(2026, 6, 8);
         Trade tradeA = trade("T-RUN-001", Side.BUY);
@@ -79,10 +81,10 @@ class FiccSurveillanceApplicationTest {
 
         when(modelRegistry.getModel(modelConfig.modelClassName())).thenReturn(model);
         when(model.modelCode()).thenReturn("FICC_WASH_TRADE");
-        when(model.getTrades(modelConfig, "emea", businessDate)).thenReturn(trades);
+        when(model.getTrades(modelConfig, "NAMR", businessDate)).thenReturn(trades);
         when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of(alert));
         when(model.generateJson(alert)).thenReturn(alertPayload);
-        when(model.dispatchAlert(modelConfig, businessDate, alert, alertPayload)).thenReturn(true);
+        when(model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload)).thenReturn(true);
 
         PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
 
@@ -90,7 +92,7 @@ class FiccSurveillanceApplicationTest {
         PrintStream originalOut = System.out;
         try {
             System.setOut(new PrintStream(output, true, StandardCharsets.UTF_8));
-            RunSummary summary = application.run(2, "emea", businessDate);
+            RunSummary summary = application.run(requestId, 2, "emea", businessDate);
             assertEquals(2, summary.tradesProcessed());
             assertEquals(1, summary.alertsGenerated());
             assertEquals(1, summary.alertsDispatched());
@@ -105,15 +107,16 @@ class FiccSurveillanceApplicationTest {
         InOrder order = inOrder(modelRegistry, model);
         order.verify(modelRegistry).getModel(modelConfig.modelClassName());
         order.verify(model).modelCode();
-        order.verify(model).getTrades(modelConfig, "emea", businessDate);
+        order.verify(model).getTrades(modelConfig, "NAMR", businessDate);
         order.verify(model).evaluate(modelConfig, trades, businessDate);
         order.verify(model).clearAlertHistory(modelConfig, businessDate);
         order.verify(model).generateJson(alert);
-        order.verify(model).dispatchAlert(modelConfig, businessDate, alert, alertPayload);
+        order.verify(model).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
     }
 
     @Test
     void runSkipsDispatchWhenAlertHistoryAlreadyExists() {
+        long requestId = 19L;
         ModelConfig modelConfig = modelConfig("FICC_WASH_TRADE");
         LocalDate businessDate = LocalDate.of(2026, 6, 8);
         Trade tradeA = trade("T-RUN-001", Side.BUY);
@@ -141,15 +144,15 @@ class FiccSurveillanceApplicationTest {
         when(model.getTrades(modelConfig, "NAMR", businessDate)).thenReturn(trades);
         when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of(alert));
         when(model.generateJson(alert)).thenReturn(alertPayload);
-        when(model.dispatchAlert(modelConfig, businessDate, alert, alertPayload)).thenReturn(false);
+        when(model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload)).thenReturn(false);
 
         PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
 
-        RunSummary summary = application.run(1, "NAMR", businessDate);
+        RunSummary summary = application.run(requestId, 1, "NAMR", businessDate);
 
         assertEquals(0, summary.alertsDispatched());
         assertEquals(1, summary.duplicateAlerts());
-        verify(model).dispatchAlert(modelConfig, businessDate, alert, alertPayload);
+        verify(model).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
     }
 
     @Test
@@ -165,7 +168,7 @@ class FiccSurveillanceApplicationTest {
 
         PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
 
-        RunSummary summary = application.run(1, "NAMR", businessDate);
+        RunSummary summary = application.run(20L, 1, "NAMR", businessDate);
 
         assertEquals(1, summary.tradesProcessed());
         assertEquals(0, summary.alertsGenerated());
@@ -174,6 +177,7 @@ class FiccSurveillanceApplicationTest {
         verify(model).clearAlertHistory(modelConfig, businessDate);
         verify(model, never()).generateJson(any(Alert.class));
         verify(model, never()).dispatchAlert(
+                anyLong(),
                 any(ModelConfig.class),
                 any(LocalDate.class),
                 any(Alert.class),
@@ -191,7 +195,7 @@ class FiccSurveillanceApplicationTest {
 
         IllegalArgumentException exception = assertThrows(
                 IllegalArgumentException.class,
-                () -> application.run(1, "NAMR", LocalDate.of(2026, 6, 8))
+                () -> application.run(21L, 1, "NAMR", LocalDate.of(2026, 6, 8))
         );
 
         assertEquals("Configured modelCode=UNEXPECTED_MODEL does not match registered modelCode=FICC_WASH_TRADE "

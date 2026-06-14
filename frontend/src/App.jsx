@@ -3,9 +3,29 @@ import { useState } from "react";
 const initialForm = {
   appId: "1",
   region: "NAMR",
-  businessDate: "2026-06-08",
+  businessDate: "2026-06-05",
   requestedBy: "frontend-demo"
 };
+
+const initialCalibrationForm = {
+  appId: "4",
+  region: "NAMRC",
+  businessDate: "2026-06-05",
+  requestedBy: "frontend-calibration",
+  oneTimeMinTotalAmount: "100000000",
+  cumulativeMinTotalAmount: "5000000",
+  quantityTolerancePercent: "5",
+  totalAmountTolerancePercent: "5",
+  cumulativeLookupDays: "4"
+};
+
+const BUSINESS_DATE_MIN = "2026-06-01";
+const BUSINESS_DATE_MAX = "2026-06-05";
+const CALIBRATION_REGIONS = [
+  { appId: "4", region: "NAMRC" },
+  { appId: "5", region: "EMEAC" },
+  { appId: "6", region: "APACC" }
+];
 
 const DEFAULT_TOLERANCE_THRESHOLD_PERCENT = 5;
 
@@ -147,14 +167,21 @@ function resultMessageForRequest(request) {
 
 export default function App() {
   const [form, setForm] = useState(initialForm);
+  const [calibrationForm, setCalibrationForm] = useState(initialCalibrationForm);
   const [searchedCriteria, setSearchedCriteria] = useState(normalizeSearchCriteria(initialForm));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingCalibration, setIsSubmittingCalibration] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
+  const [calibrationResult, setCalibrationResult] = useState(null);
   const [searchResult, setSearchResult] = useState(null);
   const [submitError, setSubmitError] = useState("");
+  const [calibrationError, setCalibrationError] = useState("");
   const [searchError, setSearchError] = useState("");
   const canSearch = form.appId.trim() && form.region.trim() && form.businessDate;
+  const canSearchCalibration = calibrationForm.appId.trim()
+    && calibrationForm.region.trim()
+    && calibrationForm.businessDate;
   const alerts = searchResult?.alerts || [];
   const runRequests = searchResult?.runRequests || (searchResult?.runRequest ? [searchResult.runRequest] : []);
   const displayedRunRequests = searchResult?.runRequest ? [searchResult.runRequest] : [];
@@ -166,8 +193,25 @@ export default function App() {
     }));
   }
 
-  async function searchAlertHistory() {
-    const criteria = normalizeSearchCriteria(form);
+  function updateCalibrationField(event) {
+    if (event.target.name === "region") {
+      const selectedRegion = CALIBRATION_REGIONS.find((option) => option.region === event.target.value);
+      setCalibrationForm((current) => ({
+        ...current,
+        appId: selectedRegion?.appId || current.appId,
+        region: event.target.value
+      }));
+      return;
+    }
+
+    setCalibrationForm((current) => ({
+      ...current,
+      [event.target.name]: event.target.value
+    }));
+  }
+
+  async function searchAlertHistory(criteriaSource = form) {
+    const criteria = normalizeSearchCriteria(criteriaSource);
     setSearchedCriteria(criteria);
     setSearchError("");
     setIsSearching(true);
@@ -182,9 +226,6 @@ export default function App() {
 
       const data = await response.json();
       setSearchResult(data);
-      if (data.runRequest) {
-        setSubmitResult(data.runRequest);
-      }
     } catch (searchFailure) {
       setSearchResult(null);
       setSearchError(searchFailure.message || "Alert history search failed.");
@@ -200,6 +241,8 @@ export default function App() {
     setSubmitResult(null);
     setSearchResult(null);
     setSubmitError("");
+    setCalibrationResult(null);
+    setCalibrationError("");
     setSearchedCriteria(criteria);
 
     try {
@@ -223,13 +266,45 @@ export default function App() {
     }
   }
 
+  async function submitCalibrationRunRequest(event) {
+    event.preventDefault();
+    const criteria = normalizeSearchCriteria(calibrationForm);
+    setIsSubmittingCalibration(true);
+    setCalibrationResult(null);
+    setSearchResult(null);
+    setSubmitResult(null);
+    setCalibrationError("");
+    setSubmitError("");
+    setSearchedCriteria(criteria);
+
+    try {
+      const response = await fetch("/calibration-run-request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: new URLSearchParams(calibrationForm)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Calibration request failed with HTTP ${response.status}`);
+      }
+
+      setCalibrationResult(await response.json());
+    } catch (submissionError) {
+      setCalibrationError(submissionError.message || "Calibration request submission failed.");
+    } finally {
+      setIsSubmittingCalibration(false);
+    }
+  }
+
   return (
     <main className="page-shell">
       <section className="workspace">
         <header className="top-bar">
           <div>
             <p className="eyebrow">Run Request Console</p>
-            <h1>Trade Surveillance (6/4~6/8)</h1>
+            <h1>Trade Surveillance (6/1~6/5)</h1>
           </div>
           <span className="environment-badge">Local MySQL</span>
         </header>
@@ -267,8 +342,8 @@ export default function App() {
                   type="date"
                   name="businessDate"
                   value={form.businessDate}
-                  min="2026-06-04"
-                  max="2026-06-08"
+                  min={BUSINESS_DATE_MIN}
+                  max={BUSINESS_DATE_MAX}
                   onChange={updateField}
                   required
                 />
@@ -289,7 +364,7 @@ export default function App() {
                   className="secondary-action"
                   type="button"
                   disabled={!canSearch || isSearching}
-                  onClick={searchAlertHistory}
+                  onClick={() => searchAlertHistory(form)}
                 >
                   {isSearching ? "Searching..." : "Search Result"}
                 </button>
@@ -327,6 +402,164 @@ export default function App() {
               <div className="status-message error" role="alert">
                 <strong>Submission failed</strong>
                 <p>{submitError}</p>
+              </div>
+            )}
+          </section>
+
+          <section className="request-panel calibration-panel" aria-labelledby="calibration-title">
+            <div className="section-heading">
+              <h2 id="calibration-title">Calibration Request</h2>
+            </div>
+
+            <form onSubmit={submitCalibrationRunRequest} className="run-form">
+              <label>
+                <span>Region</span>
+                <select name="region" value={calibrationForm.region} onChange={updateCalibrationField}>
+                  {CALIBRATION_REGIONS.map((option) => (
+                    <option key={option.region} value={option.region}>{option.region}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span>App ID</span>
+                <input
+                  name="appId"
+                  inputMode="numeric"
+                  value={calibrationForm.appId}
+                  readOnly
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Business Date</span>
+                <input
+                  type="date"
+                  name="businessDate"
+                  value={calibrationForm.businessDate}
+                  min={BUSINESS_DATE_MIN}
+                  max={BUSINESS_DATE_MAX}
+                  onChange={updateCalibrationField}
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Requested By</span>
+                <input
+                  name="requestedBy"
+                  value={calibrationForm.requestedBy}
+                  onChange={updateCalibrationField}
+                  required
+                />
+              </label>
+
+              <fieldset className="threshold-fieldset">
+                <legend>Custom Thresholds</legend>
+                <label>
+                  <span>One-Time Minimum Amount</span>
+                  <input
+                    name="oneTimeMinTotalAmount"
+                    inputMode="decimal"
+                    value={calibrationForm.oneTimeMinTotalAmount}
+                    onChange={updateCalibrationField}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Aggregate Minimum Amount</span>
+                  <input
+                    name="cumulativeMinTotalAmount"
+                    inputMode="decimal"
+                    value={calibrationForm.cumulativeMinTotalAmount}
+                    onChange={updateCalibrationField}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Quantity Tolerance %</span>
+                  <input
+                    name="quantityTolerancePercent"
+                    inputMode="decimal"
+                    value={calibrationForm.quantityTolerancePercent}
+                    onChange={updateCalibrationField}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Total Amount Tolerance %</span>
+                  <input
+                    name="totalAmountTolerancePercent"
+                    inputMode="decimal"
+                    value={calibrationForm.totalAmountTolerancePercent}
+                    onChange={updateCalibrationField}
+                    required
+                  />
+                </label>
+                <label>
+                  <span>Aggregate Lookup Days</span>
+                  <input
+                    name="cumulativeLookupDays"
+                    inputMode="numeric"
+                    value={calibrationForm.cumulativeLookupDays}
+                    onChange={updateCalibrationField}
+                    required
+                  />
+                </label>
+              </fieldset>
+
+              <div className="form-actions">
+                <button
+                  className="secondary-action"
+                  type="button"
+                  disabled={!canSearchCalibration || isSearching}
+                  onClick={() => searchAlertHistory(calibrationForm)}
+                >
+                  {isSearching ? "Searching..." : "Search Result"}
+                </button>
+                <button className="primary-action" type="submit" disabled={isSubmittingCalibration}>
+                  {isSubmittingCalibration ? "Submitting..." : "Submit Calibration Request"}
+                </button>
+              </div>
+            </form>
+
+            {calibrationResult && (
+              <div className="status-message success" role="status">
+                <strong>Calibration request status</strong>
+                <dl>
+                  <div>
+                    <dt>Request ID</dt>
+                    <dd>{calibrationResult.requestId}</dd>
+                  </div>
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{calibrationResult.status}</dd>
+                  </div>
+                  <div>
+                    <dt>Region</dt>
+                    <dd>{calibrationResult.region}</dd>
+                  </div>
+                  <div>
+                    <dt>One-Time Min</dt>
+                    <dd>{calibrationResult.oneTimeMinTotalAmount}</dd>
+                  </div>
+                  <div>
+                    <dt>Aggregate Min</dt>
+                    <dd>{calibrationResult.cumulativeMinTotalAmount}</dd>
+                  </div>
+                  <div>
+                    <dt>Lookup Days</dt>
+                    <dd>{calibrationResult.cumulativeLookupDays}</dd>
+                  </div>
+                </dl>
+              </div>
+            )}
+
+            {calibrationError && (
+              <div className="status-message error" role="alert">
+                <strong>Calibration failed</strong>
+                <p>{calibrationError}</p>
               </div>
             )}
           </section>
@@ -382,9 +615,10 @@ export default function App() {
             {displayedRunRequests.length > 0 ? (
               <div className="request-result-list">
                 {displayedRunRequests.map((request) => {
+                  const requestAlerts = alerts.filter((alert) => Number(alert.requestId) === Number(request.requestId));
                   const shouldShowAlerts = request.status === "COMPLETED"
                     && request.alertsGenerated > 0
-                    && alerts.length > 0;
+                    && requestAlerts.length > 0;
 
                   return (
                     <section className="request-result-card" key={request.requestId}>
@@ -422,6 +656,7 @@ export default function App() {
                           <table className="result-table">
                             <thead>
                               <tr>
+                                <th>Request ID</th>
                                 <th>Match Type</th>
                                 <th>Alert ID</th>
                                 <th>Related Trades</th>
@@ -429,8 +664,9 @@ export default function App() {
                               </tr>
                             </thead>
                             <tbody>
-                              {alerts.map((alert) => (
+                              {requestAlerts.map((alert) => (
                                 <tr key={`${request.requestId}-${alert.alertHistoryId}`}>
+                                  <td>{alert.requestId}</td>
                                   <td>{displayMatchType(alert.matchType)}</td>
                                   <td>{alert.alertId}</td>
                                   <td>{relatedTrades(alert)}</td>

@@ -19,13 +19,16 @@ public class AlertDispatcher {
         );
     }
 
-    public boolean dispatch(ModelConfig modelConfig, LocalDate businessDate, Alert alert, String alertPayload) {
+    public boolean dispatch(long requestId, ModelConfig modelConfig, LocalDate businessDate, Alert alert, String alertPayload) {
+        if (requestId <= 0) {
+            throw new IllegalArgumentException("requestId must be positive");
+        }
         Objects.requireNonNull(modelConfig, "modelConfig is required");
         Objects.requireNonNull(businessDate, "businessDate is required");
         Objects.requireNonNull(alert, "alert is required");
         Objects.requireNonNull(alertPayload, "alertPayload is required");
 
-        return alertHistoryRepository.saveIfNew(modelConfig, businessDate, alert, alertPayload);
+        return alertHistoryRepository.saveIfNew(requestId, modelConfig, businessDate, alert, alertPayload);
     }
 
     public int clearHistory(ModelConfig modelConfig, LocalDate businessDate) {

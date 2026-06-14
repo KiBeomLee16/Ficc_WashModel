@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 public record AlertHistoryResult(
         long alertHistoryId,
         String alertId,
+        long requestId,
         int appId,
         int modelId,
         String region,
