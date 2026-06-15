@@ -85,8 +85,10 @@ flowchart TD
     P --> Q
     Q --> R["Save Calibration Result"]
     R --> S["Save Drill-out Trades"]
-    S --> V["Compare Calibration<br/>by business key"]
-    V --> T["Mark Request COMPLETED"]
+    S --> T["Mark Request COMPLETED"]
+
+    T --> V["Frontend loads results"]
+    V --> W["Compare Calibration<br/>by business key"]
 
     D --> U["Mark Request FAILED<br/>on exception"]
 ```
