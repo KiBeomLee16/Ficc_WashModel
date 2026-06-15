@@ -80,6 +80,7 @@ public class FiccRunRequestWorker {
 	private Queue<RunRequest> claimRunnableRequests() {
 		Queue<RunRequest> runRequests = new ArrayDeque<>();
 		while (true) {
+			LOGGER.info("------------------------------------------------------------------------------------------");
 			LOGGER.debug("Attempting to claim next runnable surveillance request.");
 			Optional<RunRequest> request = runRequestRepository.claimNextRunnableRequest();
 			if (request.isEmpty()) {

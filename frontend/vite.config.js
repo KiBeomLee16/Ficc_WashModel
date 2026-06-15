@@ -14,6 +14,14 @@ export default defineConfig({
         target: "http://localhost:8080",
         changeOrigin: true
       },
+      "/calibration-run-requests": {
+        target: "http://localhost:8080",
+        changeOrigin: true
+      },
+      "/calibration-results": {
+        target: "http://localhost:8080",
+        changeOrigin: true
+      },
       "/alert-history": {
         target: "http://localhost:8080",
         changeOrigin: true

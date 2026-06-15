@@ -2,8 +2,9 @@ package com.portfolio.ficc.io;
 
 import com.portfolio.ficc.model.Alert;
 import com.portfolio.ficc.model.AlertBusinessKey;
-import com.portfolio.ficc.model.AlertHistoryResult;
+import com.portfolio.ficc.model.CalibrationAlertHistoryResult;
 import com.portfolio.ficc.model.ModelConfig;
+import com.portfolio.ficc.model.ThresholdSnapshot;
 import com.portfolio.ficc.model.Trade;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,18 +28,19 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Component
-public class AlertHistoryRepository {
+public class CalibrationResultRepository {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(AlertHistoryRepository.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(CalibrationResultRepository.class);
 
-    private static final String INSERT_ALERT_HISTORY_CALL = "{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
-    private static final String INSERT_ALERT_HISTORY_TRADE_CALL = "{CALL sp_insert_ficc_wash_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
-    private static final String FIND_ALERT_HISTORY_CALL = "{CALL sp_find_ficc_wash_alert_history(?, ?, ?)}";
-    private static final String DELETE_ALERT_HISTORY_CALL = "{CALL sp_delete_ficc_wash_alert_history_for_run(?, ?, ?, ?)}";
+    private static final String THRESHOLD_SNAPSHOT_CALL = "{CALL sp_get_surveillance_model_threshold_snapshot(?, ?, ?)}";
+    private static final String INSERT_CALIBRATION_ALERT_HISTORY_CALL = "{CALL sp_insert_ficc_wash_calibration_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
+    private static final String INSERT_CALIBRATION_ALERT_HISTORY_TRADE_CALL = "{CALL sp_insert_ficc_wash_calibration_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
+    private static final String FIND_CALIBRATION_ALERT_HISTORY_CALL = "{CALL sp_find_ficc_wash_calibration_alert_history_by_request(?)}";
+    private static final String DELETE_CALIBRATION_ALERT_HISTORY_CALL = "{CALL sp_delete_ficc_wash_calibration_alert_history_for_request(?)}";
 
     private final DatabaseConfig databaseConfig;
 
-    public AlertHistoryRepository(DatabaseConfig databaseConfig) {
+    public CalibrationResultRepository(DatabaseConfig databaseConfig) {
         this.databaseConfig = Objects.requireNonNull(databaseConfig, "databaseConfig is required");
     }
 
@@ -61,7 +63,8 @@ public class AlertHistoryRepository {
             boolean originalAutoCommit = connection.getAutoCommit();
             try {
                 connection.setAutoCommit(false);
-                long alertHistoryId = insertAlertHistory(
+                ThresholdSnapshot thresholdSnapshot = loadThresholdSnapshot(connection, modelConfig);
+                long calibrationAlertHistoryId = insertCalibrationAlertHistory(
                         connection,
                         requestId,
                         modelConfig,
@@ -72,34 +75,26 @@ public class AlertHistoryRepository {
                         alertFingerprint,
                         businessKey,
                         firstTradeDate,
-                        lastTradeDate
+                        lastTradeDate,
+                        thresholdSnapshot
                 );
-                insertAlertHistoryTrades(connection, alertHistoryId, alert);
+                insertCalibrationAlertHistoryTrades(connection, calibrationAlertHistoryId, alert);
                 connection.commit();
-                LOGGER.info("Saved alert history: alertHistoryId={}, requestId={}, alertId={}, matchType={}, relatedTrades={}, appid={}, modelid={}, region={}, businessDate={}.",
-                        alertHistoryId,
+                LOGGER.info("Saved calibration alert history: calibrationAlertHistoryId={}, requestId={}, alertId={}, matchType={}, appid={}, modelid={}, region={}, businessDate={}.",
+                        calibrationAlertHistoryId,
                         requestId,
                         alert.alertId(),
                         alert.matchType(),
-                        alert.relatedTrades().size(),
                         modelConfig.appId(),
                         modelConfig.modelId(),
                         modelConfig.region(),
                         businessDate);
-            } catch (DuplicateAlertHistoryException duplicateAlert) {
+            } catch (DuplicateCalibrationAlertHistoryException duplicateAlert) {
                 rollbackQuietly(connection);
-//                LOGGER.warn("Duplicate alert history skipped: alertId={}, matchType={}, fingerprint={}, appid={}, modelid={}, region={}, businessDate={}.",
-//                        alert.alertId(),
-//                        alert.matchType(),
-//                        alertFingerprint,
-//                        modelConfig.appId(),
-//                        modelConfig.modelId(),
-//                        modelConfig.region(),
-//                        businessDate);
                 return false;
             } catch (SQLException exception) {
                 rollbackQuietly(connection);
-                LOGGER.error("Failed to save alert history. Rolling back alert history transaction: alertId={}.",
+                LOGGER.error("Failed to save calibration alert history. Rolling back transaction: alertId={}.",
                         alert.alertId(), exception);
                 throw exception;
             } finally {
@@ -107,63 +102,55 @@ public class AlertHistoryRepository {
             }
             return true;
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to save alert history for alertId=" + alert.alertId(), exception);
+            throw new IllegalStateException("Failed to save calibration alert history for alertId="
+                    + alert.alertId(), exception);
         }
     }
 
-    public List<AlertHistoryResult> findByRunCriteria(int appId, String region, LocalDate businessDate) {
-        Objects.requireNonNull(region, "region is required");
-        Objects.requireNonNull(businessDate, "businessDate is required");
+    public List<CalibrationAlertHistoryResult> findByRequestId(long requestId) {
+        if (requestId <= 0) {
+            throw new IllegalArgumentException("requestId must be positive");
+        }
 
         try (Connection connection = getConnection();
-             CallableStatement statement = connection.prepareCall(FIND_ALERT_HISTORY_CALL)) {
-            statement.setInt(1, appId);
-            statement.setString(2, region.trim().toUpperCase());
-            statement.setDate(3, Date.valueOf(businessDate));
+             CallableStatement statement = connection.prepareCall(FIND_CALIBRATION_ALERT_HISTORY_CALL)) {
+            statement.setLong(1, requestId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
-                List<AlertHistoryResult> results = new ArrayList<>();
+                List<CalibrationAlertHistoryResult> results = new ArrayList<>();
                 while (resultSet.next()) {
-                    results.add(toAlertHistoryResult(resultSet));
+                    results.add(toCalibrationAlertHistoryResult(resultSet));
                 }
                 return results;
             }
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to search alert history for appid="
-                    + appId + ", region=" + region + ", businessDate=" + businessDate, exception);
+            throw new IllegalStateException("Failed to search calibration alert history for requestId="
+                    + requestId, exception);
         }
     }
 
-    public int deleteByRunCriteria(ModelConfig modelConfig, LocalDate businessDate) {
-        Objects.requireNonNull(modelConfig, "modelConfig is required");
-        Objects.requireNonNull(businessDate, "businessDate is required");
+    public int deleteByRequestId(long requestId) {
+        if (requestId <= 0) {
+            throw new IllegalArgumentException("requestId must be positive");
+        }
 
         try (Connection connection = getConnection();
-             CallableStatement statement = connection.prepareCall(DELETE_ALERT_HISTORY_CALL)) {
-            statement.setInt(1, modelConfig.appId());
-            statement.setInt(2, modelConfig.modelId());
-            statement.setString(3, modelConfig.region().trim().toUpperCase());
-            statement.setDate(4, Date.valueOf(businessDate));
+             CallableStatement statement = connection.prepareCall(DELETE_CALIBRATION_ALERT_HISTORY_CALL)) {
+            statement.setLong(1, requestId);
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
                     int deletedAlertCount = resultSet.getInt("deleted_alert_count");
                     int deletedTradeCount = resultSet.getInt("deleted_trade_count");
-                    LOGGER.info("Deleted existing alert history before refresh: alerts={}, drillOutTrades={}, appid={}, modelid={}, region={}, businessDate={}.",
-                            deletedAlertCount,
-                            deletedTradeCount,
-                            modelConfig.appId(),
-                            modelConfig.modelId(),
-                            modelConfig.region(),
-                            businessDate);
+                    LOGGER.info("Deleted existing calibration alert history before refresh: requestId={}, alerts={}, drillOutTrades={}.",
+                            requestId, deletedAlertCount, deletedTradeCount);
                     return deletedAlertCount;
                 }
             }
             return 0;
         } catch (SQLException exception) {
-            throw new IllegalStateException("Failed to delete alert history for appid="
-                    + modelConfig.appId() + ", modelid=" + modelConfig.modelId()
-                    + ", region=" + modelConfig.region() + ", businessDate=" + businessDate, exception);
+            throw new IllegalStateException("Failed to delete calibration alert history for requestId="
+                    + requestId, exception);
         }
     }
 
@@ -171,17 +158,28 @@ public class AlertHistoryRepository {
         return databaseConfig.getConnection();
     }
 
-    String alertFingerprint(ModelConfig modelConfig, Alert alert, String relatedTradeIds) {
-        String fingerprintInput = modelConfig.appId()
-                + "|" + modelConfig.modelId()
-                + "|" + modelConfig.region().trim().toUpperCase()
-                + "|" + alert.alertType().trim().toUpperCase()
-                + "|" + alert.matchType().trim().toUpperCase()
-                + "|" + relatedTradeIds;
-        return sha256Hex(fingerprintInput);
+    private ThresholdSnapshot loadThresholdSnapshot(Connection connection, ModelConfig modelConfig) throws SQLException {
+        try (CallableStatement statement = connection.prepareCall(THRESHOLD_SNAPSHOT_CALL)) {
+            statement.setInt(1, modelConfig.appId());
+            statement.setInt(2, modelConfig.modelId());
+            statement.setString(3, modelConfig.region());
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return new ThresholdSnapshot(
+                            resultSet.getBigDecimal("one_time_min_total_amount"),
+                            resultSet.getBigDecimal("cumulative_min_total_amount"),
+                            resultSet.getBigDecimal("quantity_tolerance_percent"),
+                            resultSet.getBigDecimal("total_amount_tolerance_percent"),
+                            resultSet.getInt("cumulative_lookup_days")
+                    );
+                }
+            }
+        }
+        throw new SQLException("Threshold snapshot procedure did not return a row");
     }
 
-    private long insertAlertHistory(
+    private long insertCalibrationAlertHistory(
             Connection connection,
             long requestId,
             ModelConfig modelConfig,
@@ -192,9 +190,10 @@ public class AlertHistoryRepository {
             String alertFingerprint,
             AlertBusinessKey businessKey,
             LocalDate firstTradeDate,
-            LocalDate lastTradeDate
-    ) throws SQLException, DuplicateAlertHistoryException {
-        try (CallableStatement statement = connection.prepareCall(INSERT_ALERT_HISTORY_CALL)) {
+            LocalDate lastTradeDate,
+            ThresholdSnapshot thresholdSnapshot
+    ) throws SQLException, DuplicateCalibrationAlertHistoryException {
+        try (CallableStatement statement = connection.prepareCall(INSERT_CALIBRATION_ALERT_HISTORY_CALL)) {
             statement.setString(1, alertFingerprint);
             statement.setString(2, alert.alertId());
             statement.setLong(3, requestId);
@@ -216,30 +215,39 @@ public class AlertHistoryRepository {
             statement.setString(19, businessKey.traderId());
             statement.setString(20, businessKey.counterpartyId());
             statement.setString(21, alertPayload);
-            statement.setString(22, "DISPATCHED");
+            statement.setBigDecimal(22, thresholdSnapshot.oneTimeMinTotalAmount());
+            statement.setBigDecimal(23, thresholdSnapshot.cumulativeMinTotalAmount());
+            statement.setBigDecimal(24, thresholdSnapshot.quantityTolerancePercent());
+            statement.setBigDecimal(25, thresholdSnapshot.totalAmountTolerancePercent());
+            statement.setInt(26, thresholdSnapshot.cumulativeLookupDays());
+            statement.setString(27, "DISPATCHED");
 
             try (ResultSet resultSet = statement.executeQuery()) {
                 if (resultSet.next()) {
-                    return resultSet.getLong("alert_history_id");
+                    return resultSet.getLong("calibration_alert_history_id");
                 }
             }
-            throw new SQLException("Alert history insert did not return generated alert_history_id");
+            throw new SQLException("Calibration alert history insert did not return generated id");
         } catch (SQLIntegrityConstraintViolationException duplicateAlert) {
-            throw new DuplicateAlertHistoryException(duplicateAlert);
+            throw new DuplicateCalibrationAlertHistoryException(duplicateAlert);
         } catch (SQLException exception) {
             if ("23000".equals(exception.getSQLState()) || exception.getErrorCode() == 1062) {
-                throw new DuplicateAlertHistoryException(exception);
+                throw new DuplicateCalibrationAlertHistoryException(exception);
             }
             throw exception;
         }
     }
 
-    private void insertAlertHistoryTrades(Connection connection, long alertHistoryId, Alert alert) throws SQLException {
+    private void insertCalibrationAlertHistoryTrades(
+            Connection connection,
+            long calibrationAlertHistoryId,
+            Alert alert
+    ) throws SQLException {
         List<Trade> relatedTrades = sortedRelatedTrades(alert);
-        try (CallableStatement statement = connection.prepareCall(INSERT_ALERT_HISTORY_TRADE_CALL)) {
+        try (CallableStatement statement = connection.prepareCall(INSERT_CALIBRATION_ALERT_HISTORY_TRADE_CALL)) {
             int sequence = 1;
             for (Trade trade : relatedTrades) {
-                statement.setLong(1, alertHistoryId);
+                statement.setLong(1, calibrationAlertHistoryId);
                 statement.setInt(2, sequence++);
                 statement.setString(3, trade.tradeId());
                 statement.setDate(4, Date.valueOf(trade.timestamp().toLocalDate()));
@@ -265,10 +273,10 @@ public class AlertHistoryRepository {
         }
     }
 
-    private AlertHistoryResult toAlertHistoryResult(ResultSet resultSet) throws SQLException {
+    private CalibrationAlertHistoryResult toCalibrationAlertHistoryResult(ResultSet resultSet) throws SQLException {
         Timestamp createdAt = resultSet.getTimestamp("created_at");
-        return new AlertHistoryResult(
-                resultSet.getLong("alert_history_id"),
+        return new CalibrationAlertHistoryResult(
+                resultSet.getLong("calibration_alert_history_id"),
                 resultSet.getString("alert_id"),
                 resultSet.getLong("request_id"),
                 resultSet.getInt("appid"),
@@ -289,9 +297,24 @@ public class AlertHistoryRepository {
                 resultSet.getString("trader_id"),
                 resultSet.getString("counterparty_id"),
                 resultSet.getString("alert_payload"),
+                resultSet.getBigDecimal("one_time_min_total_amount"),
+                resultSet.getBigDecimal("cumulative_min_total_amount"),
+                resultSet.getBigDecimal("quantity_tolerance_percent"),
+                resultSet.getBigDecimal("total_amount_tolerance_percent"),
+                resultSet.getInt("cumulative_lookup_days"),
                 resultSet.getString("dispatch_status"),
                 createdAt == null ? null : createdAt.toLocalDateTime()
         );
+    }
+
+    private String alertFingerprint(ModelConfig modelConfig, Alert alert, String relatedTradeIds) {
+        String fingerprintInput = modelConfig.appId()
+                + "|" + modelConfig.modelId()
+                + "|" + modelConfig.region().trim().toUpperCase()
+                + "|" + alert.alertType().trim().toUpperCase()
+                + "|" + alert.matchType().trim().toUpperCase()
+                + "|" + relatedTradeIds;
+        return sha256Hex(fingerprintInput);
     }
 
     private String relatedTradeIds(Alert alert) {
@@ -305,6 +328,15 @@ public class AlertHistoryRepository {
         return alert.relatedTrades()
                 .stream()
                 .min(Comparator.comparing(Trade::timestamp).thenComparing(Trade::tradeId))
+                .orElseThrow()
+                .timestamp()
+                .toLocalDate();
+    }
+
+    private LocalDate lastTradeDate(Alert alert) {
+        return alert.relatedTrades()
+                .stream()
+                .max(Comparator.comparing(Trade::timestamp).thenComparing(Trade::tradeId))
                 .orElseThrow()
                 .timestamp()
                 .toLocalDate();
@@ -333,15 +365,6 @@ public class AlertHistoryRepository {
         }
     }
 
-    private LocalDate lastTradeDate(Alert alert) {
-        return alert.relatedTrades()
-                .stream()
-                .max(Comparator.comparing(Trade::timestamp).thenComparing(Trade::tradeId))
-                .orElseThrow()
-                .timestamp()
-                .toLocalDate();
-    }
-
     private String sha256Hex(String value) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -356,9 +379,9 @@ public class AlertHistoryRepository {
         }
     }
 
-    private static class DuplicateAlertHistoryException extends Exception {
+    private static class DuplicateCalibrationAlertHistoryException extends Exception {
 
-        DuplicateAlertHistoryException(SQLException cause) {
+        DuplicateCalibrationAlertHistoryException(SQLException cause) {
             super(cause);
         }
     }

@@ -28,6 +28,8 @@ public class RunRequestRepository {
     private static final String INSERT_RUN_REQUEST_CALL = "{CALL sp_insert_surveillance_run_request(?, ?, ?, ?)}";
     private static final String FIND_LATEST_RUN_REQUEST_CALL = "{CALL sp_find_latest_surveillance_run_request(?, ?, ?)}";
     private static final String FIND_RUN_REQUESTS_CALL = "{CALL sp_find_surveillance_run_requests(?, ?, ?)}";
+    private static final String FIND_RUN_REQUEST_BY_ID_CALL = "{CALL sp_find_surveillance_run_request_by_id(?)}";
+    private static final String FIND_CALIBRATION_RUN_REQUESTS_CALL = "{CALL sp_find_calibration_run_requests()}";
     private static final String MARK_COMPLETED_CALL = "{CALL sp_mark_surveillance_run_request_completed(?, ?)}";
     private static final String MARK_FAILED_CALL = "{CALL sp_mark_surveillance_run_request_failed(?, ?)}";
 
@@ -116,6 +118,41 @@ public class RunRequestRepository {
         } catch (SQLException exception) {
             throw new IllegalStateException("Failed to search run requests for appid="
                     + appId + ", region=" + region + ", businessDate=" + businessDate, exception);
+        }
+    }
+
+    public Optional<RunRequestStatus> findByRequestId(long requestId) {
+        if (requestId <= 0) {
+            throw new IllegalArgumentException("requestId must be positive");
+        }
+
+        try (Connection connection = getConnection();
+             CallableStatement statement = connection.prepareCall(FIND_RUN_REQUEST_BY_ID_CALL)) {
+            statement.setLong(1, requestId);
+
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return Optional.of(toRunRequestStatus(resultSet));
+                }
+            }
+            return Optional.empty();
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to search run request for requestId=" + requestId, exception);
+        }
+    }
+
+    public List<RunRequestStatus> findCalibrationRunRequests() {
+        try (Connection connection = getConnection();
+             CallableStatement statement = connection.prepareCall(FIND_CALIBRATION_RUN_REQUESTS_CALL)) {
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<RunRequestStatus> results = new ArrayList<>();
+                while (resultSet.next()) {
+                    results.add(toRunRequestStatus(resultSet));
+                }
+                return results;
+            }
+        } catch (SQLException exception) {
+            throw new IllegalStateException("Failed to search calibration run requests", exception);
         }
     }
 

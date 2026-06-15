@@ -27,6 +27,9 @@ class AlertDispatcherTest {
     @Mock
     private AlertHistoryRepository alertHistoryRepository;
 
+    @Mock
+    private CalibrationResultRepository calibrationResultRepository;
+
     @Test
     void dispatchStoresAlertPayloadInHistoryDb() {
         long requestId = 18L;
@@ -36,7 +39,7 @@ class AlertDispatcherTest {
         String payload = "{\"alertId\":\"ficc_wash_alert_1\"}";
         when(alertHistoryRepository.saveIfNew(requestId, modelConfig, businessDate, alert, payload)).thenReturn(true);
 
-        AlertDispatcher dispatcher = new AlertDispatcher(alertHistoryRepository);
+        AlertDispatcher dispatcher = new AlertDispatcher(alertHistoryRepository, calibrationResultRepository);
 
         boolean dispatched = dispatcher.dispatch(requestId, modelConfig, businessDate, alert, payload);
 
@@ -46,7 +49,7 @@ class AlertDispatcherTest {
 
     @Test
     void dispatchRejectsNullPayload() {
-        AlertDispatcher dispatcher = new AlertDispatcher(alertHistoryRepository);
+        AlertDispatcher dispatcher = new AlertDispatcher(alertHistoryRepository, calibrationResultRepository);
 
         NullPointerException exception = assertThrows(
                 NullPointerException.class,
@@ -57,17 +60,47 @@ class AlertDispatcherTest {
     }
 
     @Test
+    void dispatchCalibrationResultStoresPayloadInCalibrationHistoryDb() {
+        long requestId = 24L;
+        ModelConfig modelConfig = modelConfig();
+        LocalDate businessDate = LocalDate.of(2026, 6, 8);
+        Alert alert = alert();
+        String payload = "{\"alertId\":\"ficc_wash_alert_1\"}";
+        when(calibrationResultRepository.saveIfNew(requestId, modelConfig, businessDate, alert, payload))
+                .thenReturn(true);
+
+        AlertDispatcher dispatcher = new AlertDispatcher(alertHistoryRepository, calibrationResultRepository);
+
+        boolean dispatched = dispatcher.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, payload);
+
+        assertTrue(dispatched);
+        verify(calibrationResultRepository).saveIfNew(requestId, modelConfig, businessDate, alert, payload);
+    }
+
+    @Test
     void clearHistoryDeletesExistingRunAlertHistory() {
         ModelConfig modelConfig = modelConfig();
         LocalDate businessDate = LocalDate.of(2026, 6, 8);
         when(alertHistoryRepository.deleteByRunCriteria(modelConfig, businessDate)).thenReturn(2);
 
-        AlertDispatcher dispatcher = new AlertDispatcher(alertHistoryRepository);
+        AlertDispatcher dispatcher = new AlertDispatcher(alertHistoryRepository, calibrationResultRepository);
 
         int deletedAlerts = dispatcher.clearHistory(modelConfig, businessDate);
 
         assertEquals(2, deletedAlerts);
         verify(alertHistoryRepository).deleteByRunCriteria(modelConfig, businessDate);
+    }
+
+    @Test
+    void clearCalibrationResultsDeletesExistingRequestResultRows() {
+        when(calibrationResultRepository.deleteByRequestId(24L)).thenReturn(2);
+
+        AlertDispatcher dispatcher = new AlertDispatcher(alertHistoryRepository, calibrationResultRepository);
+
+        int deletedAlerts = dispatcher.clearCalibrationResults(24L);
+
+        assertEquals(2, deletedAlerts);
+        verify(calibrationResultRepository).deleteByRequestId(24L);
     }
 
     private static ModelConfig modelConfig() {

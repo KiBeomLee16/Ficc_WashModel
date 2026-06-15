@@ -87,8 +87,22 @@ public abstract class AbstractSurveillanceModel {
         return alertDispatcher.dispatch(requestId, modelConfig, businessDate, alert, alertPayload);
     }
 
+    public boolean dispatchCalibrationResult(
+            long requestId,
+            ModelConfig modelConfig,
+            LocalDate businessDate,
+            Alert alert,
+            String alertPayload
+    ) {
+        return alertDispatcher.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
+    }
+
     public int clearAlertHistory(ModelConfig modelConfig, LocalDate businessDate) {
         return alertDispatcher.clearHistory(modelConfig, businessDate);
+    }
+
+    public int clearCalibrationResults(long requestId) {
+        return alertDispatcher.clearCalibrationResults(requestId);
     }
 
     protected Connection getConnection() throws SQLException {

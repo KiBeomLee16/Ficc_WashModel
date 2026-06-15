@@ -148,6 +148,52 @@ function relatedTrades(alert) {
   return alert.relatedTradeIds.split(",").join(" / ");
 }
 
+function alertBusinessKey(alert) {
+  const parts = [
+    alert.tradeDate,
+    alert.instrumentId,
+    alert.maturityDate,
+    alert.currency,
+    alert.traderId,
+    alert.counterpartyId
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" | ") : "-";
+}
+
+function thresholdSnapshot(alert) {
+  return [
+    `One-time min ${alert.oneTimeMinTotalAmount ?? "-"}`,
+    `Aggregate min ${alert.cumulativeMinTotalAmount ?? "-"}`,
+    `Qty tol ${alert.quantityTolerancePercent ?? "-"}%`,
+    `Amount tol ${alert.totalAmountTolerancePercent ?? "-"}%`,
+    `Lookup ${alert.cumulativeLookupDays ?? "-"} day(s)`
+  ].join(" | ");
+}
+
+function comparisonLabel(status) {
+  switch (status) {
+    case "SAME_AS_PRODUCTION":
+      return "Same as production";
+    case "PRODUCTION_REMOVED":
+      return "Removed from calibration";
+    case "CALIBRATION_NEW":
+      return "New calibration alert";
+    default:
+      return "Unknown";
+  }
+}
+
+function comparisonRowClass(status) {
+  switch (status) {
+    case "PRODUCTION_REMOVED":
+      return "comparison-removed";
+    case "CALIBRATION_NEW":
+      return "comparison-new";
+    default:
+      return "";
+  }
+}
+
 function formatDateTime(value) {
   if (!value) {
     return "-";
@@ -174,14 +220,15 @@ export default function App() {
   const [isSearching, setIsSearching] = useState(false);
   const [submitResult, setSubmitResult] = useState(null);
   const [calibrationResult, setCalibrationResult] = useState(null);
+  const [calibrationRunRequests, setCalibrationRunRequests] = useState([]);
+  const [selectedCalibrationResult, setSelectedCalibrationResult] = useState(null);
   const [searchResult, setSearchResult] = useState(null);
   const [submitError, setSubmitError] = useState("");
   const [calibrationError, setCalibrationError] = useState("");
   const [searchError, setSearchError] = useState("");
+  const [isLoadingCalibrationRequests, setIsLoadingCalibrationRequests] = useState(false);
+  const [isLoadingCalibrationResult, setIsLoadingCalibrationResult] = useState(false);
   const canSearch = form.appId.trim() && form.region.trim() && form.businessDate;
-  const canSearchCalibration = calibrationForm.appId.trim()
-    && calibrationForm.region.trim()
-    && calibrationForm.businessDate;
   const alerts = searchResult?.alerts || [];
   const runRequests = searchResult?.runRequests || (searchResult?.runRequest ? [searchResult.runRequest] : []);
   const displayedRunRequests = searchResult?.runRequest ? [searchResult.runRequest] : [];
@@ -275,6 +322,7 @@ export default function App() {
     setSubmitResult(null);
     setCalibrationError("");
     setSubmitError("");
+    setSelectedCalibrationResult(null);
     setSearchedCriteria(criteria);
 
     try {
@@ -290,12 +338,188 @@ export default function App() {
         throw new Error(`Calibration request failed with HTTP ${response.status}`);
       }
 
-      setCalibrationResult(await response.json());
+      const data = await response.json();
+      setCalibrationResult(data);
+      await loadCalibrationRunRequests(data.requestId);
     } catch (submissionError) {
       setCalibrationError(submissionError.message || "Calibration request submission failed.");
     } finally {
       setIsSubmittingCalibration(false);
     }
+  }
+
+  async function loadCalibrationRunRequests(requestIdToSelect = selectedCalibrationResult?.runRequest?.requestId) {
+    setCalibrationError("");
+    setIsLoadingCalibrationRequests(true);
+
+    try {
+      const response = await fetch("/calibration-run-requests");
+
+      if (!response.ok) {
+        throw new Error(`Calibration run request search failed with HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const requests = data.requests || [];
+      setCalibrationRunRequests(requests);
+
+      const targetRequest = requests.find((request) => Number(request.requestId) === Number(requestIdToSelect))
+        || requests[0];
+      if (targetRequest) {
+        await selectCalibrationRunRequest(targetRequest.requestId);
+      } else {
+        setSelectedCalibrationResult(null);
+      }
+    } catch (loadError) {
+      setCalibrationError(loadError.message || "Calibration run request search failed.");
+    } finally {
+      setIsLoadingCalibrationRequests(false);
+    }
+  }
+
+  async function selectCalibrationRunRequest(requestId) {
+    setCalibrationError("");
+    setIsLoadingCalibrationResult(true);
+
+    try {
+      const params = new URLSearchParams({ requestId: String(requestId) });
+      const response = await fetch(`/calibration-results?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`Calibration result search failed with HTTP ${response.status}`);
+      }
+
+      setSelectedCalibrationResult(await response.json());
+    } catch (loadError) {
+      setSelectedCalibrationResult(null);
+      setCalibrationError(loadError.message || "Calibration result search failed.");
+    } finally {
+      setIsLoadingCalibrationResult(false);
+    }
+  }
+
+  function renderProductionResultWindow() {
+    return (
+      <section className="embedded-result-panel" aria-labelledby="result-title">
+        <div className="section-heading">
+          <h2 id="result-title">Result Window</h2>
+          <p>Search result is loaded from MySQL alert history for the selected app, region, and business date.</p>
+        </div>
+
+        <div className={alerts.length > 0 ? "result-window populated" : "result-window"}>
+          <div className="result-grid">
+            <div>
+              <span>App ID</span>
+              <strong>{searchedCriteria.appId}</strong>
+            </div>
+            <div>
+              <span>Region</span>
+              <strong>{searchedCriteria.region}</strong>
+            </div>
+            <div>
+              <span>Business Date</span>
+              <strong>{searchedCriteria.businessDate}</strong>
+            </div>
+            <div>
+              <span>Alert History</span>
+              <strong>{searchResult ? `${searchResult.alertCount} alert(s) found` : "Not searched"}</strong>
+            </div>
+            <div>
+              <span>Run Requests</span>
+              <strong>{searchResult ? `${runRequests.length} request(s) found` : "Not searched"}</strong>
+            </div>
+            <div>
+              <span>Result Source</span>
+              <strong>{searchResult ? "MySQL" : "Waiting for search"}</strong>
+            </div>
+          </div>
+
+          <p className="result-detail">
+            {searchResult
+              ? `Showing latest request result. Loaded ${runRequests.length} run request row(s) and ${searchResult.alertCount} alert history row(s) for appId ${searchResult.appId}, region ${searchResult.region}, business date ${searchResult.businessDate}.`
+              : "Use Search Result to query stored alert history from MySQL."}
+          </p>
+
+          {searchError && (
+            <div className="status-message error" role="alert">
+              <strong>Search failed</strong>
+              <p>{searchError}</p>
+            </div>
+          )}
+
+          {displayedRunRequests.length > 0 ? (
+            <div className="request-result-list">
+              {displayedRunRequests.map((request) => {
+                const requestAlerts = alerts.filter((alert) => Number(alert.requestId) === Number(request.requestId));
+                const shouldShowAlerts = request.status === "COMPLETED"
+                  && request.alertsGenerated > 0
+                  && requestAlerts.length > 0;
+
+                return (
+                  <section className="request-result-card" key={request.requestId}>
+                    <div className="request-result-header">
+                      <div>
+                        <h3>Request ID {request.requestId}</h3>
+                        <p>{resultMessageForRequest(request)}</p>
+                      </div>
+                      <span className={`status-pill ${request.status.toLowerCase()}`}>
+                        {request.status}
+                      </span>
+                    </div>
+
+                    <div className="request-meta-grid">
+                      <div>
+                        <span>Alerts Generated</span>
+                        <strong>{request.alertsGenerated}</strong>
+                      </div>
+                      <div>
+                        <span>Requested At</span>
+                        <strong>{formatDateTime(request.requestedAt)}</strong>
+                      </div>
+                      <div>
+                        <span>Started At</span>
+                        <strong>{formatDateTime(request.startedAt)}</strong>
+                      </div>
+                      <div>
+                        <span>Completed At</span>
+                        <strong>{formatDateTime(request.completedAt)}</strong>
+                      </div>
+                    </div>
+
+                    {shouldShowAlerts ? (
+                      <div className="table-wrap">
+                        <table className="result-table">
+                          <thead>
+                            <tr>
+                              <th>Request ID</th>
+                              <th>Match Type</th>
+                              <th>Alert ID</th>
+                              <th>Related Trades</th>
+                              <th>Reason</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {requestAlerts.map((alert) => (
+                              <tr key={`${request.requestId}-${alert.alertHistoryId}`}>
+                                <td>{alert.requestId}</td>
+                                <td>{displayMatchType(alert.matchType)}</td>
+                                <td>{alert.alertId}</td>
+                                <td>{relatedTrades(alert)}</td>
+                                <td>{alertReason(alert)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                  </section>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -310,7 +534,7 @@ export default function App() {
         </header>
 
         <div className="content-grid">
-          <section className="request-panel" aria-labelledby="request-title">
+          <section className="request-panel production-panel" aria-labelledby="request-title">
             <div className="section-heading">
               <h2 id="request-title">Create Run Request</h2>
             </div>
@@ -404,6 +628,8 @@ export default function App() {
                 <p>{submitError}</p>
               </div>
             )}
+
+            {renderProductionResultWindow()}
           </section>
 
           <section className="request-panel calibration-panel" aria-labelledby="calibration-title">
@@ -513,10 +739,10 @@ export default function App() {
                 <button
                   className="secondary-action"
                   type="button"
-                  disabled={!canSearchCalibration || isSearching}
-                  onClick={() => searchAlertHistory(calibrationForm)}
+                  disabled={isLoadingCalibrationRequests}
+                  onClick={loadCalibrationRunRequests}
                 >
-                  {isSearching ? "Searching..." : "Search Result"}
+                  {isLoadingCalibrationRequests ? "Loading..." : "Load Requests"}
                 </button>
                 <button className="primary-action" type="submit" disabled={isSubmittingCalibration}>
                   {isSubmittingCalibration ? "Submitting..." : "Submit Calibration Request"}
@@ -563,127 +789,151 @@ export default function App() {
               </div>
             )}
           </section>
-        </div>
 
-        <section className="result-panel" aria-labelledby="result-title">
-          <div className="section-heading">
-            <h2 id="result-title">Result Window</h2>
-            <p>Search result is loaded from MySQL alert history for the selected app, region, and business date.</p>
-          </div>
-
-          <div className={alerts.length > 0 ? "result-window populated" : "result-window"}>
-            <div className="result-grid">
+          <section className="request-panel calibration-list-panel" aria-labelledby="calibration-results-title">
+            <div className="section-heading panel-heading-actions">
               <div>
-                <span>App ID</span>
-                <strong>{searchedCriteria.appId}</strong>
+                <h2 id="calibration-results-title">Calibration Run Requests</h2>
+                <p>Click a calibration request to view threshold-specific alert results.</p>
               </div>
-              <div>
-                <span>Region</span>
-                <strong>{searchedCriteria.region}</strong>
-              </div>
-              <div>
-                <span>Business Date</span>
-                <strong>{searchedCriteria.businessDate}</strong>
-              </div>
-              <div>
-                <span>Alert History</span>
-                <strong>{searchResult ? `${searchResult.alertCount} alert(s) found` : "Not searched"}</strong>
-              </div>
-              <div>
-                <span>Run Requests</span>
-                <strong>{searchResult ? `${runRequests.length} request(s) found` : "Not searched"}</strong>
-              </div>
-              <div>
-                <span>Result Source</span>
-                <strong>{searchResult ? "MySQL" : "Waiting for search"}</strong>
-              </div>
+              <button
+                className="secondary-action compact-action"
+                type="button"
+                disabled={isLoadingCalibrationRequests}
+                onClick={loadCalibrationRunRequests}
+              >
+                {isLoadingCalibrationRequests ? "Loading..." : "Refresh"}
+              </button>
             </div>
 
-            <p className="result-detail">
-              {searchResult
-                ? `Showing latest request result. Loaded ${runRequests.length} run request row(s) and ${searchResult.alertCount} alert history row(s) for appId ${searchResult.appId}, region ${searchResult.region}, business date ${searchResult.businessDate}.`
-                : "Use Search Result to query stored alert history from MySQL."}
-            </p>
-
-            {searchError && (
-              <div className="status-message error" role="alert">
-                <strong>Search failed</strong>
-                <p>{searchError}</p>
+            <div className="calibration-board">
+              <div className="table-wrap">
+                <table className="result-table calibration-request-table">
+                  <thead>
+                    <tr>
+                      <th>Request ID</th>
+                      <th>App ID</th>
+                      <th>Region</th>
+                      <th>Business Date</th>
+                      <th>Status</th>
+                      <th>Alerts</th>
+                      <th>Requested At</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calibrationRunRequests.length > 0 ? (
+                      calibrationRunRequests.map((request) => (
+                        <tr key={request.requestId}>
+                          <td>
+                            <button
+                              className="request-link-button"
+                              type="button"
+                              onClick={() => selectCalibrationRunRequest(request.requestId)}
+                            >
+                              {request.requestId}
+                            </button>
+                          </td>
+                          <td>{request.appId}</td>
+                          <td>{request.region}</td>
+                          <td>{request.businessDate}</td>
+                          <td>
+                            <span className={`status-pill ${request.status.toLowerCase()}`}>
+                              {request.status}
+                            </span>
+                          </td>
+                          <td>{request.alertsGenerated}</td>
+                          <td>{formatDateTime(request.requestedAt)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="7">No calibration run requests loaded.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
 
-            {displayedRunRequests.length > 0 ? (
-              <div className="request-result-list">
-                {displayedRunRequests.map((request) => {
-                  const requestAlerts = alerts.filter((alert) => Number(alert.requestId) === Number(request.requestId));
-                  const shouldShowAlerts = request.status === "COMPLETED"
-                    && request.alertsGenerated > 0
-                    && requestAlerts.length > 0;
-
-                  return (
-                    <section className="request-result-card" key={request.requestId}>
-                      <div className="request-result-header">
-                        <div>
-                          <h3>Request ID {request.requestId}</h3>
-                          <p>{resultMessageForRequest(request)}</p>
-                        </div>
-                        <span className={`status-pill ${request.status.toLowerCase()}`}>
-                          {request.status}
-                        </span>
+              <section className="calibration-detail-card">
+                {selectedCalibrationResult ? (
+                  <>
+                    <div className="request-result-header">
+                      <div>
+                        <h3>Request ID {selectedCalibrationResult.runRequest.requestId}</h3>
+                        <p>{resultMessageForRequest(selectedCalibrationResult.runRequest)}</p>
                       </div>
+                      <span className={`status-pill ${selectedCalibrationResult.runRequest.status.toLowerCase()}`}>
+                        {selectedCalibrationResult.runRequest.status}
+                      </span>
+                    </div>
 
-                      <div className="request-meta-grid">
-                        <div>
-                          <span>Alerts Generated</span>
-                          <strong>{request.alertsGenerated}</strong>
-                        </div>
-                        <div>
-                          <span>Requested At</span>
-                          <strong>{formatDateTime(request.requestedAt)}</strong>
-                        </div>
-                        <div>
-                          <span>Started At</span>
-                          <strong>{formatDateTime(request.startedAt)}</strong>
-                        </div>
-                        <div>
-                          <span>Completed At</span>
-                          <strong>{formatDateTime(request.completedAt)}</strong>
-                        </div>
+                    <div className="request-meta-grid">
+                      <div>
+                        <span>App ID</span>
+                        <strong>{selectedCalibrationResult.runRequest.appId}</strong>
                       </div>
+                      <div>
+                        <span>Region</span>
+                        <strong>{selectedCalibrationResult.runRequest.region}</strong>
+                      </div>
+                      <div>
+                        <span>Business Date</span>
+                        <strong>{selectedCalibrationResult.runRequest.businessDate}</strong>
+                      </div>
+                      <div>
+                        <span>Alert Rows</span>
+                        <strong>{selectedCalibrationResult.alertCount}</strong>
+                      </div>
+                    </div>
 
-                      {shouldShowAlerts ? (
-                        <div className="table-wrap">
-                          <table className="result-table">
-                            <thead>
-                              <tr>
-                                <th>Request ID</th>
-                                <th>Match Type</th>
-                                <th>Alert ID</th>
-                                <th>Related Trades</th>
-                                <th>Reason</th>
+                    {selectedCalibrationResult.alerts.length > 0 ? (
+                      <div className="table-wrap">
+                        <table className="result-table calibration-result-table">
+                          <thead>
+                            <tr>
+                              <th>Comparison</th>
+                              <th>Match Type</th>
+                              <th>Alert ID</th>
+                              <th>Related Trades</th>
+                              <th>Business Key</th>
+                              <th>Threshold Snapshot</th>
+                              <th>Reason</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedCalibrationResult.alerts.map((alert) => (
+                              <tr
+                                className={comparisonRowClass(alert.comparisonStatus)}
+                                key={`${alert.comparisonStatus}-${alert.calibrationAlertHistoryId ?? alert.productionAlertHistoryId ?? alert.alertId}`}
+                              >
+                                <td>{comparisonLabel(alert.comparisonStatus)}</td>
+                                <td>{displayMatchType(alert.matchType)}</td>
+                                <td>{alert.alertId}</td>
+                                <td>{relatedTrades(alert)}</td>
+                                <td>{alertBusinessKey(alert)}</td>
+                                <td>{thresholdSnapshot(alert)}</td>
+                                <td>{alertReason(alert)}</td>
                               </tr>
-                            </thead>
-                            <tbody>
-                              {requestAlerts.map((alert) => (
-                                <tr key={`${request.requestId}-${alert.alertHistoryId}`}>
-                                  <td>{alert.requestId}</td>
-                                  <td>{displayMatchType(alert.matchType)}</td>
-                                  <td>{alert.alertId}</td>
-                                  <td>{relatedTrades(alert)}</td>
-                                  <td>{alertReason(alert)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      ) : null}
-                    </section>
-                  );
-                })}
-              </div>
-            ) : null}
-          </div>
-        </section>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="empty-result">No calibration alert rows were generated for this request.</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="empty-result">
+                    {isLoadingCalibrationResult
+                      ? "Loading calibration result..."
+                      : "Select a calibration request to view the result rows."}
+                  </p>
+                )}
+              </section>
+            </div>
+          </section>
+        </div>
+
       </section>
     </main>
   );

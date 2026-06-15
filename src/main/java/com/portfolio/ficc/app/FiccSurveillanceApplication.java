@@ -61,19 +61,45 @@ public class FiccSurveillanceApplication {
         LOGGER.info("------------------------------------------------------------------------------------------");
         LOGGER.info("Evaluated surveillance model and generated {} alerts : region={}, businessDate={}.",
                 alerts.size(), modelConfig.region(), businessDate);
-        int deletedAlerts = model.clearAlertHistory(modelConfig, businessDate);
-        LOGGER.info("Refreshed alert history before dispatch: deletedAlerts={}, appid={}, modelid={}, region={}, businessDate={}.",
-                deletedAlerts,
-                appId,
-                modelConfig.modelId(),
-                modelConfig.region(),
-                businessDate);
+        boolean calibrationRun = isCalibrationRun(modelConfig);
+        int deletedAlerts = 0;
+        int deletedCalibrationAlerts = model.clearCalibrationResults(requestId);
+        if (!calibrationRun) {
+            deletedAlerts = model.clearAlertHistory(modelConfig, businessDate);
+            LOGGER.info("Refreshed production alert history before dispatch: deletedAlerts={}, appid={}, modelid={}, region={}, businessDate={}.",
+                    deletedAlerts,
+                    appId,
+                    modelConfig.modelId(),
+                    modelConfig.region(),
+                    businessDate);
+        } else {
+            LOGGER.info("Calibration run detected. Production alert history refresh skipped: requestId={}, appid={}, modelid={}, region={}, businessDate={}.",
+                    requestId,
+                    appId,
+                    modelConfig.modelId(),
+                    modelConfig.region(),
+                    businessDate);
+        }
+        LOGGER.info("Refreshed calibration result history before dispatch: deletedCalibrationAlerts={}, requestId={}.",
+                deletedCalibrationAlerts, requestId);
         int dispatchedAlerts = 0;
         int duplicateAlerts = 0;
 
         for (Alert alert : alerts) {
             String alertPayload = model.generateJson(alert);
-            if (model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload)) {
+            boolean productionSaved = false;
+            if (!calibrationRun) {
+                productionSaved = model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
+            }
+            boolean calibrationSaved = model.dispatchCalibrationResult(
+                    requestId,
+                    modelConfig,
+                    businessDate,
+                    alert,
+                    alertPayload
+            );
+
+            if (productionSaved || calibrationSaved) {
                 dispatchedAlerts++;
             } else {
                 duplicateAlerts++;
@@ -109,6 +135,16 @@ public class FiccSurveillanceApplication {
                 dispatchedAlerts,
                 duplicateAlerts
         );
+    }
+
+    private boolean isCalibrationRun(ModelConfig modelConfig) {
+        String normalizedRegion = modelConfig.region().trim().toUpperCase();
+        return switch (modelConfig.appId()) {
+            case 4 -> "NAMRC".equals(normalizedRegion);
+            case 5 -> "EMEAC".equals(normalizedRegion);
+            case 6 -> "APACC".equals(normalizedRegion);
+            default -> false;
+        };
     }
 
     /**

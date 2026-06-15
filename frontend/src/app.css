@@ -113,6 +113,16 @@ h3 {
   padding: 24px;
 }
 
+.production-panel {
+  grid-column: 1 / -1;
+}
+
+.embedded-result-panel {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #e2eaec;
+}
+
 .result-panel {
   margin-top: 18px;
   padding: 22px;
@@ -128,6 +138,19 @@ h3 {
   color: #607279;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.panel-heading-actions {
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.compact-action {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 760;
 }
 
 .run-form {
@@ -342,6 +365,24 @@ h3 {
   gap: 14px;
 }
 
+.calibration-list-panel {
+  grid-column: 1 / -1;
+}
+
+.calibration-board {
+  display: grid;
+  gap: 14px;
+}
+
+.calibration-detail-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #cfdcde;
+  border-radius: 8px;
+  background: #fbfcfc;
+  padding: 14px;
+}
+
 .request-result-card {
   display: grid;
   gap: 14px;
@@ -467,6 +508,38 @@ h3 {
   line-height: 1.4;
 }
 
+.result-table tr.comparison-new td {
+  background: #fff6c7;
+}
+
+.result-table tr.comparison-removed td {
+  background: #eef1f2;
+  color: #5a686d;
+}
+
+.calibration-request-table {
+  min-width: 920px;
+}
+
+.calibration-result-table {
+  min-width: 1080px;
+}
+
+.request-link-button {
+  border: 0;
+  background: transparent;
+  color: #126c74;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 760;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.request-link-button:hover {
+  color: #0b5359;
+}
+
 .result-table tr:last-child td {
   border-bottom: 0;
 }
@@ -492,6 +565,10 @@ h3 {
   .status-message dl,
   .result-grid,
   .request-meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-heading-actions {
     grid-template-columns: 1fr;
   }
 

@@ -85,6 +85,8 @@ class FiccSurveillanceApplicationTest {
         when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of(alert));
         when(model.generateJson(alert)).thenReturn(alertPayload);
         when(model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload)).thenReturn(true);
+        when(model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload))
+                .thenReturn(true);
 
         PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
 
@@ -109,9 +111,11 @@ class FiccSurveillanceApplicationTest {
         order.verify(model).modelCode();
         order.verify(model).getTrades(modelConfig, "NAMR", businessDate);
         order.verify(model).evaluate(modelConfig, trades, businessDate);
+        order.verify(model).clearCalibrationResults(requestId);
         order.verify(model).clearAlertHistory(modelConfig, businessDate);
         order.verify(model).generateJson(alert);
         order.verify(model).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
+        order.verify(model).dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
     }
 
     @Test
@@ -145,6 +149,8 @@ class FiccSurveillanceApplicationTest {
         when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of(alert));
         when(model.generateJson(alert)).thenReturn(alertPayload);
         when(model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload)).thenReturn(false);
+        when(model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload))
+                .thenReturn(false);
 
         PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
 
@@ -153,6 +159,7 @@ class FiccSurveillanceApplicationTest {
         assertEquals(0, summary.alertsDispatched());
         assertEquals(1, summary.duplicateAlerts());
         verify(model).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
+        verify(model).dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
     }
 
     @Test
@@ -174,6 +181,7 @@ class FiccSurveillanceApplicationTest {
         assertEquals(0, summary.alertsGenerated());
         assertEquals(0, summary.alertsDispatched());
         assertEquals(0, summary.duplicateAlerts());
+        verify(model).clearCalibrationResults(20L);
         verify(model).clearAlertHistory(modelConfig, businessDate);
         verify(model, never()).generateJson(any(Alert.class));
         verify(model, never()).dispatchAlert(
@@ -183,6 +191,103 @@ class FiccSurveillanceApplicationTest {
                 any(Alert.class),
                 any(String.class)
         );
+        verify(model, never()).dispatchCalibrationResult(
+                anyLong(),
+                any(ModelConfig.class),
+                any(LocalDate.class),
+                any(Alert.class),
+                any(String.class)
+        );
+    }
+
+    @Test
+    void runCalibrationModelWritesOnlyCalibrationResults() {
+        long requestId = 22L;
+        ModelConfig modelConfig = modelConfig(4, "NAMRC", "FICC_WASH_TRADE");
+        LocalDate businessDate = LocalDate.of(2026, 6, 8);
+        Trade tradeA = trade("T-RUN-001", Side.BUY);
+        Trade tradeB = trade("T-RUN-002", Side.SELL);
+        List<Trade> trades = List.of(tradeA, tradeB);
+        Alert alert = new Alert(
+                "ficc_wash_alert_1",
+                "FICC_WASH_TRADE",
+                "ONE_TIME_TRANSACTION",
+                tradeA,
+                tradeB,
+                List.of(tradeA, tradeB),
+                tradeA.quantity(),
+                tradeB.quantity(),
+                tradeA.totalAmount(),
+                tradeB.totalAmount(),
+                new BigDecimal("100000000"),
+                List.of("calibration result"),
+                Instant.parse("2026-06-08T00:00:00Z")
+        );
+        String alertPayload = "{\"alertId\":\"ficc_wash_alert_1\"}";
+
+        when(modelRegistry.getModel(modelConfig.modelClassName())).thenReturn(model);
+        when(model.modelCode()).thenReturn("FICC_WASH_TRADE");
+        when(model.getTrades(modelConfig, "NAMRC", businessDate)).thenReturn(trades);
+        when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of(alert));
+        when(model.generateJson(alert)).thenReturn(alertPayload);
+        when(model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload))
+                .thenReturn(true);
+
+        PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
+
+        RunSummary summary = application.run(requestId, 4, "NAMRC", businessDate);
+
+        assertEquals(1, summary.alertsDispatched());
+        assertEquals(0, summary.duplicateAlerts());
+        verify(model).clearCalibrationResults(requestId);
+        verify(model, never()).clearAlertHistory(modelConfig, businessDate);
+        verify(model, never()).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
+        verify(model).dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
+    }
+
+    @Test
+    void runApacProductionModelWritesProductionAndCalibrationMirror() {
+        long requestId = 23L;
+        ModelConfig modelConfig = modelConfig(3, "APAC", "FICC_WASH_TRADE");
+        LocalDate businessDate = LocalDate.of(2026, 6, 8);
+        Trade tradeA = trade("T-APAC-001", Side.BUY);
+        Trade tradeB = trade("T-APAC-002", Side.SELL);
+        List<Trade> trades = List.of(tradeA, tradeB);
+        Alert alert = new Alert(
+                "ficc_wash_alert_1",
+                "FICC_WASH_TRADE",
+                "ONE_TIME_TRANSACTION",
+                tradeA,
+                tradeB,
+                List.of(tradeA, tradeB),
+                tradeA.quantity(),
+                tradeB.quantity(),
+                tradeA.totalAmount(),
+                tradeB.totalAmount(),
+                new BigDecimal("100000000"),
+                List.of("apac production result"),
+                Instant.parse("2026-06-08T00:00:00Z")
+        );
+        String alertPayload = "{\"alertId\":\"ficc_wash_alert_1\"}";
+
+        when(modelRegistry.getModel(modelConfig.modelClassName())).thenReturn(model);
+        when(model.modelCode()).thenReturn("FICC_WASH_TRADE");
+        when(model.getTrades(modelConfig, "APAC", businessDate)).thenReturn(trades);
+        when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of(alert));
+        when(model.generateJson(alert)).thenReturn(alertPayload);
+        when(model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload)).thenReturn(true);
+        when(model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload))
+                .thenReturn(true);
+
+        PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
+
+        RunSummary summary = application.run(requestId, 3, "APAC", businessDate);
+
+        assertEquals(1, summary.alertsDispatched());
+        verify(model).clearCalibrationResults(requestId);
+        verify(model).clearAlertHistory(modelConfig, businessDate);
+        verify(model).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
+        verify(model).dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
     }
 
     @Test
@@ -251,10 +356,14 @@ class FiccSurveillanceApplicationTest {
     }
 
     private static ModelConfig modelConfig(String modelCode) {
+        return modelConfig(1, "NAMR", modelCode);
+    }
+
+    private static ModelConfig modelConfig(int appId, String region, String modelCode) {
         return new ModelConfig(
+                appId,
                 1,
-                1,
-                "NAMR",
+                region,
                 "NAMR FICC Surveillance App",
                 modelCode,
                 "FICC Wash Trade Surveillance Model",

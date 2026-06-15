@@ -174,6 +174,57 @@ class RunRequestRepositoryTest {
     }
 
     @Test
+    void findByRequestIdReturnsRequestStatus() throws Exception {
+        LocalDate businessDate = LocalDate.of(2026, 6, 8);
+        when(connection.prepareCall("{CALL sp_find_surveillance_run_request_by_id(?)}"))
+                .thenReturn(searchStatement);
+        when(searchStatement.executeQuery()).thenReturn(searchResultSet);
+        when(searchResultSet.next()).thenReturn(true);
+        when(searchResultSet.getLong("request_id")).thenReturn(24L);
+        when(searchResultSet.getInt("appid")).thenReturn(4);
+        when(searchResultSet.getString("region")).thenReturn("NAMRC");
+        when(searchResultSet.getDate("business_date")).thenReturn(Date.valueOf(businessDate));
+        when(searchResultSet.getString("status")).thenReturn("COMPLETED");
+        when(searchResultSet.getInt("alerts_generated")).thenReturn(2);
+        when(searchResultSet.getTimestamp("requested_at"))
+                .thenReturn(Timestamp.valueOf("2026-06-08 09:00:00"));
+
+        RunRequestRepository repository = new ConnectionBackedRunRequestRepository(connection);
+
+        Optional<RunRequestStatus> status = repository.findByRequestId(24L);
+
+        assertTrue(status.isPresent());
+        assertEquals(24L, status.get().requestId());
+        assertEquals(4, status.get().appId());
+        assertEquals("NAMRC", status.get().region());
+        verify(searchStatement).setLong(1, 24L);
+    }
+
+    @Test
+    void findCalibrationRunRequestsReturnsCalibrationStatuses() throws Exception {
+        LocalDate businessDate = LocalDate.of(2026, 6, 8);
+        when(connection.prepareCall("{CALL sp_find_calibration_run_requests()}"))
+                .thenReturn(searchStatement);
+        when(searchStatement.executeQuery()).thenReturn(searchResultSet);
+        when(searchResultSet.next()).thenReturn(true).thenReturn(false);
+        when(searchResultSet.getLong("request_id")).thenReturn(24L);
+        when(searchResultSet.getInt("appid")).thenReturn(4);
+        when(searchResultSet.getString("region")).thenReturn("NAMRC");
+        when(searchResultSet.getDate("business_date")).thenReturn(Date.valueOf(businessDate));
+        when(searchResultSet.getString("status")).thenReturn("COMPLETED");
+        when(searchResultSet.getInt("alerts_generated")).thenReturn(2);
+
+        RunRequestRepository repository = new ConnectionBackedRunRequestRepository(connection);
+
+        List<RunRequestStatus> statuses = repository.findCalibrationRunRequests();
+
+        assertEquals(1, statuses.size());
+        assertEquals(24L, statuses.get(0).requestId());
+        assertEquals("NAMRC", statuses.get(0).region());
+        verify(searchStatement).executeQuery();
+    }
+
+    @Test
     void markCompletedPersistsRunCounts() throws Exception {
         when(connection.prepareCall("{CALL sp_mark_surveillance_run_request_completed(?, ?)}"))
                 .thenReturn(updateStatement);
