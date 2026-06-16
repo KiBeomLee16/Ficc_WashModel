@@ -32,7 +32,7 @@ public class AlertHistoryRepository {
     private static final Logger LOGGER = LoggerFactory.getLogger(AlertHistoryRepository.class);
 
     private static final String INSERT_ALERT_HISTORY_CALL = "{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
-    private static final String INSERT_ALERT_HISTORY_TRADE_CALL = "{CALL sp_insert_ficc_wash_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
+    private static final String INSERT_ALERT_DRILL_OUT_CALL = "{CALL sp_insert_ficc_wash_alert_drill_out(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
     private static final String FIND_ALERT_HISTORY_CALL = "{CALL sp_find_ficc_wash_alert_history(?, ?, ?)}";
     private static final String DELETE_ALERT_HISTORY_CALL = "{CALL sp_delete_ficc_wash_alert_history_for_run(?, ?, ?, ?)}";
 
@@ -74,7 +74,7 @@ public class AlertHistoryRepository {
                         firstTradeDate,
                         lastTradeDate
                 );
-                insertAlertHistoryTrades(connection, alertHistoryId, alert);
+                insertAlertDrillOutRows(connection, alertHistoryId, alert);
                 connection.commit();
                 LOGGER.info("Saved alert history: alertHistoryId={}, requestId={}, alertId={}, matchType={}, relatedTrades={}, appid={}, modelid={}, region={}, businessDate={}.",
                         alertHistoryId,
@@ -234,9 +234,9 @@ public class AlertHistoryRepository {
         }
     }
 
-    private void insertAlertHistoryTrades(Connection connection, long alertHistoryId, Alert alert) throws SQLException {
+    private void insertAlertDrillOutRows(Connection connection, long alertHistoryId, Alert alert) throws SQLException {
         List<Trade> relatedTrades = sortedRelatedTrades(alert);
-        try (CallableStatement statement = connection.prepareCall(INSERT_ALERT_HISTORY_TRADE_CALL)) {
+        try (CallableStatement statement = connection.prepareCall(INSERT_ALERT_DRILL_OUT_CALL)) {
             int sequence = 1;
             for (Trade trade : relatedTrades) {
                 statement.setLong(1, alertHistoryId);

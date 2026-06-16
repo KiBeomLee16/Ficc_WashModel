@@ -99,7 +99,7 @@ class CalibrationResultRepositoryTest {
         when(historyStatement.executeQuery()).thenReturn(generatedKeys);
         when(generatedKeys.next()).thenReturn(true);
         when(generatedKeys.getLong("calibration_alert_history_id")).thenReturn(99L);
-        when(connection.prepareCall("{CALL sp_insert_ficc_wash_calibration_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
+        when(connection.prepareCall("{CALL sp_insert_ficc_wash_calibration_alert_drill_out(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
                 .thenReturn(detailStatement);
         when(detailStatement.executeUpdate()).thenReturn(1);
 

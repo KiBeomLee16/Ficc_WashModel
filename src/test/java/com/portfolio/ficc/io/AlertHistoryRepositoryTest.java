@@ -83,7 +83,7 @@ class AlertHistoryRepositoryTest {
         when(historyStatement.executeQuery()).thenReturn(generatedKeys);
         when(generatedKeys.next()).thenReturn(true);
         when(generatedKeys.getLong("alert_history_id")).thenReturn(42L);
-        when(connection.prepareCall("{CALL sp_insert_ficc_wash_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
+        when(connection.prepareCall("{CALL sp_insert_ficc_wash_alert_drill_out(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}"))
                 .thenReturn(detailStatement);
         when(detailStatement.executeUpdate()).thenReturn(1);
 
@@ -167,7 +167,7 @@ class AlertHistoryRepositoryTest {
         assertFalse(saved);
         verify(connection).rollback();
         verify(connection, never()).commit();
-        verify(connection, never()).prepareCall("{CALL sp_insert_ficc_wash_alert_history_trade(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}");
+        verify(connection, never()).prepareCall("{CALL sp_insert_ficc_wash_alert_drill_out(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}");
     }
 
     @Test

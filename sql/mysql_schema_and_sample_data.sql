@@ -14,17 +14,17 @@ DROP PROCEDURE IF EXISTS sp_find_calibration_run_requests;
 DROP PROCEDURE IF EXISTS sp_mark_surveillance_run_request_completed;
 DROP PROCEDURE IF EXISTS sp_mark_surveillance_run_request_failed;
 DROP PROCEDURE IF EXISTS sp_insert_ficc_wash_alert_history;
-DROP PROCEDURE IF EXISTS sp_insert_ficc_wash_alert_history_trade;
+DROP PROCEDURE IF EXISTS sp_insert_ficc_wash_alert_drill_out;
 DROP PROCEDURE IF EXISTS sp_find_ficc_wash_alert_history;
 DROP PROCEDURE IF EXISTS sp_delete_ficc_wash_alert_history_for_run;
 DROP PROCEDURE IF EXISTS sp_insert_ficc_wash_calibration_alert_history;
-DROP PROCEDURE IF EXISTS sp_insert_ficc_wash_calibration_alert_history_trade;
+DROP PROCEDURE IF EXISTS sp_insert_ficc_wash_calibration_alert_drill_out;
 DROP PROCEDURE IF EXISTS sp_find_ficc_wash_calibration_alert_history_by_request;
 DROP PROCEDURE IF EXISTS sp_delete_ficc_wash_calibration_alert_history_for_request;
 DROP PROCEDURE IF EXISTS sp_get_surveillance_model_threshold_snapshot;
-DROP TABLE IF EXISTS ficc_wash_calibration_alert_history_trade;
+DROP TABLE IF EXISTS ficc_wash_calibration_alert_drill_out;
 DROP TABLE IF EXISTS ficc_wash_calibration_alert_history;
-DROP TABLE IF EXISTS ficc_wash_alert_history_trade;
+DROP TABLE IF EXISTS ficc_wash_alert_drill_out;
 DROP TABLE IF EXISTS ficc_wash_alert_history;
 DROP TABLE IF EXISTS surveillance_run_request;
 DROP TABLE IF EXISTS surveillance_model_threshold;
@@ -128,7 +128,7 @@ CREATE TABLE ficc_wash_alert_history (
         REFERENCES surveillance_model_config (appid, modelid, region)
 );
 
-CREATE TABLE ficc_wash_alert_history_trade (
+CREATE TABLE ficc_wash_alert_drill_out (
     alert_history_id BIGINT NOT NULL,
     trade_sequence INT NOT NULL,
     trade_id VARCHAR(50) NOT NULL,
@@ -152,10 +152,10 @@ CREATE TABLE ficc_wash_alert_history_trade (
     trade_role VARCHAR(30) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (alert_history_id, trade_id),
-    UNIQUE KEY uk_ficc_wash_alert_history_trade_sequence (alert_history_id, trade_sequence),
-    INDEX idx_ficc_wash_alert_history_trade_trade (trade_id),
-    INDEX idx_ficc_wash_alert_history_trade_date (trade_date),
-    CONSTRAINT fk_ficc_wash_alert_history_trade_history
+    UNIQUE KEY uk_ficc_wash_alert_drill_out_sequence (alert_history_id, trade_sequence),
+    INDEX idx_ficc_wash_alert_drill_out_trade (trade_id),
+    INDEX idx_ficc_wash_alert_drill_out_date (trade_date),
+    CONSTRAINT fk_ficc_wash_alert_drill_out_history
         FOREIGN KEY (alert_history_id)
         REFERENCES ficc_wash_alert_history (alert_history_id)
 );
@@ -202,7 +202,7 @@ CREATE TABLE ficc_wash_calibration_alert_history (
         REFERENCES surveillance_model_config (appid, modelid, region)
 );
 
-CREATE TABLE ficc_wash_calibration_alert_history_trade (
+CREATE TABLE ficc_wash_calibration_alert_drill_out (
     calibration_alert_history_id BIGINT NOT NULL,
     trade_sequence INT NOT NULL,
     trade_id VARCHAR(50) NOT NULL,
@@ -226,10 +226,10 @@ CREATE TABLE ficc_wash_calibration_alert_history_trade (
     trade_role VARCHAR(30) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (calibration_alert_history_id, trade_id),
-    UNIQUE KEY uk_ficc_wash_calibration_alert_history_trade_sequence (calibration_alert_history_id, trade_sequence),
-    INDEX idx_ficc_wash_calibration_alert_history_trade_trade (trade_id),
-    INDEX idx_ficc_wash_calibration_alert_history_trade_date (trade_date),
-    CONSTRAINT fk_ficc_wash_calibration_alert_history_trade_history
+    UNIQUE KEY uk_ficc_wash_calibration_alert_drill_out_sequence (calibration_alert_history_id, trade_sequence),
+    INDEX idx_ficc_wash_calibration_alert_drill_out_trade (trade_id),
+    INDEX idx_ficc_wash_calibration_alert_drill_out_date (trade_date),
+    CONSTRAINT fk_ficc_wash_calibration_alert_drill_out_history
         FOREIGN KEY (calibration_alert_history_id)
         REFERENCES ficc_wash_calibration_alert_history (calibration_alert_history_id)
 );
@@ -753,7 +753,7 @@ BEGIN
     SELECT LAST_INSERT_ID() AS alert_history_id;
 END//
 
-CREATE PROCEDURE sp_insert_ficc_wash_alert_history_trade(
+CREATE PROCEDURE sp_insert_ficc_wash_alert_drill_out(
     IN p_alert_history_id BIGINT,
     IN p_trade_sequence INT,
     IN p_trade_id VARCHAR(50),
@@ -777,7 +777,7 @@ CREATE PROCEDURE sp_insert_ficc_wash_alert_history_trade(
     IN p_trade_role VARCHAR(30)
 )
 BEGIN
-    INSERT INTO ficc_wash_alert_history_trade (
+    INSERT INTO ficc_wash_alert_drill_out (
         alert_history_id,
         trade_sequence,
         trade_id,
@@ -872,7 +872,7 @@ BEGIN
     DECLARE v_deleted_alert_count INT DEFAULT 0;
 
     DELETE detail
-    FROM ficc_wash_alert_history_trade detail
+    FROM ficc_wash_alert_drill_out detail
     JOIN ficc_wash_alert_history history
       ON detail.alert_history_id = history.alert_history_id
     WHERE history.appid = p_appid
@@ -986,7 +986,7 @@ BEGIN
     SELECT LAST_INSERT_ID() AS calibration_alert_history_id;
 END//
 
-CREATE PROCEDURE sp_insert_ficc_wash_calibration_alert_history_trade(
+CREATE PROCEDURE sp_insert_ficc_wash_calibration_alert_drill_out(
     IN p_calibration_alert_history_id BIGINT,
     IN p_trade_sequence INT,
     IN p_trade_id VARCHAR(50),
@@ -1010,7 +1010,7 @@ CREATE PROCEDURE sp_insert_ficc_wash_calibration_alert_history_trade(
     IN p_trade_role VARCHAR(30)
 )
 BEGIN
-    INSERT INTO ficc_wash_calibration_alert_history_trade (
+    INSERT INTO ficc_wash_calibration_alert_drill_out (
         calibration_alert_history_id,
         trade_sequence,
         trade_id,
@@ -1103,7 +1103,7 @@ BEGIN
     DECLARE v_deleted_alert_count INT DEFAULT 0;
 
     DELETE detail
-    FROM ficc_wash_calibration_alert_history_trade detail
+    FROM ficc_wash_calibration_alert_drill_out detail
     JOIN ficc_wash_calibration_alert_history history
       ON detail.calibration_alert_history_id = history.calibration_alert_history_id
     WHERE history.request_id = p_request_id;

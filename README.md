@@ -15,7 +15,7 @@ FICC means Fixed Income, Currencies, and Commodities. The application can run fr
 - Explainable alert JSON containing matched trades, aggregate amounts, threshold values, and detection reasons.
 - Duplicate alert prevention through alert fingerprints in alert history tables.
 - Alert business-key storage using trade date, instrument, maturity, currency, trader, and counterparty fields.
-- Drill-out trade storage in `ficc_wash_alert_history_trade` for investigation and interview demos.
+- Drill-out trade storage in `ficc_wash_alert_drill_out` for investigation and interview demos.
 - Calibration requests with appids `4` to `6`, custom thresholds, and separate calibration result history.
 - Non-calibration appids `1` to `3` write production history and also mirror results into calibration history for comparison.
 - Calibration result comparison against production history by alert business key: unchanged results stay white, production-only removed results show gray, and new calibration-only alerts show yellow in the frontend.
@@ -143,9 +143,9 @@ surveillance_model_config
 surveillance_run_request
 surveillance_model_threshold
 ficc_wash_alert_history
-ficc_wash_alert_history_trade
+ficc_wash_alert_drill_out
 ficc_wash_calibration_alert_history
-ficc_wash_calibration_alert_history_trade
+ficc_wash_calibration_alert_drill_out
 ```
 
 Table responsibilities:
@@ -157,9 +157,9 @@ Table responsibilities:
 | `surveillance_run_request` | Queue-style run request table. Stored procedures claim `PENDING` and `FAILED` rows, mark them `RUNNING`, then write `COMPLETED` with generated alert count or `FAILED` with `error_message`. |
 | `surveillance_model_threshold` | Runtime thresholds. `evaluate()` calls `sp_get_surveillance_model_threshold` to retrieve amount/tolerance thresholds. The `lookup_days` column controls how far back `sp_get_ficc_trades` queries for cumulative surveillance. |
 | `ficc_wash_alert_history` | Production alert dispatch history for appids `1` to `3`. Before a production run is reprocessed, rows for the same app/model/region/business date are refreshed. The table stores `alert_business_key_hash` and the business key fields used for calibration comparison. |
-| `ficc_wash_alert_history_trade` | Production drill-out trade snapshot table. It stores each related trade for a generated alert, including trade date/time, instrument, side, quantity, amount, counterparty, account, trader, desk, book, broker, and BUY/SELL leg role. |
+| `ficc_wash_alert_drill_out` | Production drill-out trade snapshot table. It stores each related trade for a generated alert, including trade date/time, instrument, side, quantity, amount, counterparty, account, trader, desk, book, broker, and BUY/SELL leg role. |
 | `ficc_wash_calibration_alert_history` | Calibration result history. It stores alert JSON, the threshold snapshot used for that request, and the same business key fields as production history. Calibration appids `4` to `6` write here only; production appids also mirror rows here for comparison. |
-| `ficc_wash_calibration_alert_history_trade` | Calibration drill-out trade snapshot table. It keeps the related trades for each calibration result row. |
+| `ficc_wash_calibration_alert_drill_out` | Calibration drill-out trade snapshot table. It keeps the related trades for each calibration result row. |
 
 The seed data creates three production app rows and three calibration app rows:
 
@@ -399,7 +399,7 @@ ORDER BY alert_history_id DESC;
 
 ```sql
 SELECT alert_history_id, trade_sequence, trade_id, trade_date, side, quantity, total_amount, counterparty_id, trade_role
-FROM ficc_wash_alert_history_trade
+FROM ficc_wash_alert_drill_out
 ORDER BY alert_history_id DESC, trade_sequence;
 ```
 
