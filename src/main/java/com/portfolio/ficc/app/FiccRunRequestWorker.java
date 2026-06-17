@@ -26,6 +26,7 @@ public class FiccRunRequestWorker {
 	}
 
 	public void run() {
+		LOGGER.info("------------------------------------------------------------------------------------------");
 		LOGGER.info("Starting surveillance run request worker.");
 		processRunnableRequests();
 	}
@@ -54,10 +55,7 @@ public class FiccRunRequestWorker {
 		System.out.printf("Run request %d started for appid=%d, region=%s, businessDate=%s.%n", request.requestId(),
 				request.appId(), request.region(), request.businessDate());
 		try {
-			RunSummary summary = surveillanceApplication.run(
-					request.requestId(),
-					request.appId(),
-					request.region(),
+			RunSummary summary = surveillanceApplication.run(request.requestId(), request.appId(), request.region(),
 					request.businessDate());
 			runRequestRepository.markCompleted(request, summary);
 			LOGGER.info("------------------------------------------------------------------------------------------");

@@ -17,41 +17,25 @@ import java.util.Objects;
 @CrossOrigin(origins = "http://localhost:5173")
 public class RunRequestController {
 
-    private final RunRequestRepository runRequestRepository;
+	private final RunRequestRepository runRequestRepository;
 
-    public RunRequestController(RunRequestRepository runRequestRepository) {
-        this.runRequestRepository = Objects.requireNonNull(runRequestRepository, "runRequestRepository is required");
-    }
+	public RunRequestController(RunRequestRepository runRequestRepository) {
+		this.runRequestRepository = Objects.requireNonNull(runRequestRepository, "runRequestRepository is required");
+	}
 
-    @PostMapping(
-            value = "/run-request",
-            consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE,
-            produces = MediaType.APPLICATION_JSON_VALUE
-    )
-    @ResponseBody
-    public ResponseEntity<RunRequestSubmissionResponse> submitRunRequest(
-            @RequestParam int appId,
-            @RequestParam String region,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate businessDate,
-            @RequestParam(defaultValue = "frontend-user") String requestedBy
-    ) {
-        long requestId = runRequestRepository.insertRunRequest(appId, region, businessDate, requestedBy);
+	@PostMapping(value = "/run-request", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+	@ResponseBody
+	public ResponseEntity<RunRequestSubmissionResponse> submitRunRequest(@RequestParam int appId,
+			@RequestParam String region,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate businessDate,
+			@RequestParam(defaultValue = "frontend-user") String requestedBy) {
+		long requestId = runRequestRepository.insertRunRequest(appId, region, businessDate, requestedBy);
 
-        return ResponseEntity.accepted().body(new RunRequestSubmissionResponse(
-                requestId,
-                appId,
-                region.trim().toUpperCase(),
-                businessDate,
-                "PENDING"
-        ));
-    }
+		return ResponseEntity.accepted().body(new RunRequestSubmissionResponse(requestId, appId,
+				region.trim().toUpperCase(), businessDate, "PENDING"));
+	}
 
-    public record RunRequestSubmissionResponse(
-            long requestId,
-            int appId,
-            String region,
-            LocalDate businessDate,
-            String status
-    ) {
-    }
+	public record RunRequestSubmissionResponse(long requestId, int appId, String region, LocalDate businessDate,
+			String status) {
+	}
 }

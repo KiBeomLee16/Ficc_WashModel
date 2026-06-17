@@ -161,6 +161,95 @@ Table responsibilities:
 | `ficc_wash_calibration_alert_history` | Calibration result history. It stores alert JSON, the threshold snapshot used for that request, and the same business key fields as production history. Calibration appids `4` to `6` write here only; production appids also mirror rows here for comparison. |
 | `ficc_wash_calibration_alert_drill_out` | Calibration drill-out trade snapshot table. It keeps the related trades for each calibration result row. |
 
+ERD overview:
+
+```mermaid
+erDiagram
+    surveillance_model_master ||--o{ surveillance_model_config : configures
+    surveillance_model_master ||--o{ surveillance_run_request : receives
+    surveillance_model_config ||--o{ surveillance_model_threshold : defines
+    surveillance_model_config ||--o{ ficc_wash_alert_history : produces
+    surveillance_model_config ||--o{ ficc_wash_calibration_alert_history : produces
+
+    surveillance_run_request ||--o{ ficc_wash_alert_history : records
+    surveillance_run_request ||--o{ ficc_wash_calibration_alert_history : records
+
+    ficc_wash_alert_history ||--o{ ficc_wash_alert_drill_out : explains
+    ficc_wash_calibration_alert_history ||--o{ ficc_wash_calibration_alert_drill_out : explains
+
+    surveillance_model_master {
+        int appid PK
+        string region
+        string model_code
+        string model_class_name
+    }
+
+    surveillance_model_config {
+        int appid PK_FK
+        int modelid PK
+        string region PK
+    }
+
+    surveillance_run_request {
+        bigint request_id PK
+        int appid FK
+        string region
+        date business_date
+        string status
+        int alerts_generated
+    }
+
+    surveillance_model_threshold {
+        int appid PK_FK
+        int modelid PK_FK
+        string region PK_FK
+        string threshold_name PK
+        decimal threshold_value
+        int lookup_days
+    }
+
+    ficc_wash_alert_history {
+        bigint alert_history_id PK
+        bigint request_id FK
+        int appid FK
+        int modelid FK
+        string region FK
+        string match_type
+        string alert_business_key_hash
+        date business_date
+    }
+
+    ficc_wash_alert_drill_out {
+        bigint alert_history_id PK_FK
+        string trade_id PK
+        int trade_sequence
+        string side
+        decimal quantity
+        decimal total_amount
+    }
+
+    ficc_wash_calibration_alert_history {
+        bigint calibration_alert_history_id PK
+        bigint request_id FK
+        int appid FK
+        int modelid FK
+        string region FK
+        string match_type
+        string alert_business_key_hash
+        decimal one_time_min_total_amount
+        decimal cumulative_min_total_amount
+    }
+
+    ficc_wash_calibration_alert_drill_out {
+        bigint calibration_alert_history_id PK_FK
+        string trade_id PK
+        int trade_sequence
+        string side
+        decimal quantity
+        decimal total_amount
+    }
+```
+
 The seed data creates three production app rows and three calibration app rows:
 
 | appid | region | name |

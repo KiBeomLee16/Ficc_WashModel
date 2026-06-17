@@ -117,6 +117,10 @@ h3 {
   grid-column: 1 / -1;
 }
 
+.calibration-panel {
+  grid-column: 1 / -1;
+}
+
 .embedded-result-panel {
   margin-top: 22px;
   padding-top: 20px;

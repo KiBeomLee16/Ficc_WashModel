@@ -1,10 +1,9 @@
 package com.portfolio.ficc.model;
 
 public enum Side {
-    BUY,
-    SELL;
+	BUY, SELL;
 
-    public boolean isOpposite(Side other) {
-        return other != null && this != other;
-    }
+	public boolean isOpposite(Side other) {
+		return other != null && this != other;
+	}
 }

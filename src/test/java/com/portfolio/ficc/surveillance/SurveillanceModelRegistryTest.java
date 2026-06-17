@@ -11,30 +11,22 @@ import static com.portfolio.ficc.TestConfigs.alertDispatcher;
 
 class SurveillanceModelRegistryTest {
 
-    @Test
-    void resolvesRegisteredModelByClassName() {
-        SurveillanceModelRegistry registry = new SurveillanceModelRegistry(
-                List.of(new FiccWashTradeModel(
-                        new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""),
-                        alertDispatcher()
-                ))
-        );
+	@Test
+	void resolvesRegisteredModelByClassName() {
+		SurveillanceModelRegistry registry = new SurveillanceModelRegistry(List.of(new FiccWashTradeModel(
+				new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""), alertDispatcher())));
 
-        AbstractSurveillanceModel model = registry.getModel("com.portfolio.ficc.surveillance.FiccWashTradeModel");
+		AbstractSurveillanceModel model = registry.getModel("com.portfolio.ficc.surveillance.FiccWashTradeModel");
 
-        assertEquals("FICC_WASH_TRADE", model.modelCode());
-    }
+		assertEquals("FICC_WASH_TRADE", model.modelCode());
+	}
 
-    @Test
-    void rejectsUnregisteredModelClassName() {
-        SurveillanceModelRegistry registry = new SurveillanceModelRegistry(
-                List.of(new FiccWashTradeModel(
-                        new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""),
-                        alertDispatcher()
-                ))
-        );
+	@Test
+	void rejectsUnregisteredModelClassName() {
+		SurveillanceModelRegistry registry = new SurveillanceModelRegistry(List.of(new FiccWashTradeModel(
+				new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""), alertDispatcher())));
 
-        assertThrows(IllegalArgumentException.class,
-                () -> registry.getModel("com.portfolio.ficc.surveillance.UnknownModel"));
-    }
+		assertThrows(IllegalArgumentException.class,
+				() -> registry.getModel("com.portfolio.ficc.surveillance.UnknownModel"));
+	}
 }

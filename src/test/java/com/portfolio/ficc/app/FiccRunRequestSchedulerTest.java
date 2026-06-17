@@ -7,13 +7,13 @@ import static org.mockito.Mockito.verify;
 
 class FiccRunRequestSchedulerTest {
 
-    @Test
-    void scanAndRunDelegatesToRunRequestWorker() {
-        FiccRunRequestWorker runRequestWorker = mock(FiccRunRequestWorker.class);
-        FiccRunRequestScheduler scheduler = new FiccRunRequestScheduler(runRequestWorker);
+	@Test
+	void scanAndRunDelegatesToRunRequestWorker() {
+		FiccRunRequestWorker runRequestWorker = mock(FiccRunRequestWorker.class);
+		FiccRunRequestScheduler scheduler = new FiccRunRequestScheduler(runRequestWorker);
 
-        scheduler.scanAndRun();
+		scheduler.scanAndRun();
 
-        verify(runRequestWorker).run();
-    }
+		verify(runRequestWorker).run();
+	}
 }

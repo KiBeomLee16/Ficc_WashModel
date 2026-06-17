@@ -21,62 +21,33 @@ import java.util.Objects;
 @CrossOrigin(origins = "http://localhost:5173")
 public class AlertHistoryController {
 
-    private final AlertHistoryRepository alertHistoryRepository;
-    private final RunRequestRepository runRequestRepository;
+	private final AlertHistoryRepository alertHistoryRepository;
+	private final RunRequestRepository runRequestRepository;
 
-    public AlertHistoryController(
-            AlertHistoryRepository alertHistoryRepository,
-            RunRequestRepository runRequestRepository
-    ) {
-        this.alertHistoryRepository = Objects.requireNonNull(
-                alertHistoryRepository,
-                "alertHistoryRepository is required"
-        );
-        this.runRequestRepository = Objects.requireNonNull(runRequestRepository, "runRequestRepository is required");
-    }
+	public AlertHistoryController(AlertHistoryRepository alertHistoryRepository,
+			RunRequestRepository runRequestRepository) {
+		this.alertHistoryRepository = Objects.requireNonNull(alertHistoryRepository,
+				"alertHistoryRepository is required");
+		this.runRequestRepository = Objects.requireNonNull(runRequestRepository, "runRequestRepository is required");
+	}
 
-    @GetMapping(
-            value = "/alert-history",
-            produces = MediaType.APPLICATION_JSON_VALUE
-    )
-    @ResponseBody
-    public ResponseEntity<AlertHistorySearchResponse> searchAlertHistory(
-            @RequestParam int appId,
-            @RequestParam String region,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate businessDate
-    ) {
-        String normalizedRegion = region.trim().toUpperCase();
-        List<AlertHistoryResult> alerts = alertHistoryRepository.findByRunCriteria(
-                appId,
-                normalizedRegion,
-                businessDate
-        );
-        List<RunRequestStatus> runRequests = runRequestRepository.findByRunCriteria(
-                appId,
-                normalizedRegion,
-                businessDate
-        );
-        RunRequestStatus latestRunRequest = runRequests.isEmpty() ? null : runRequests.get(0);
+	@GetMapping(value = "/alert-history", produces = MediaType.APPLICATION_JSON_VALUE)
+	@ResponseBody
+	public ResponseEntity<AlertHistorySearchResponse> searchAlertHistory(@RequestParam int appId,
+			@RequestParam String region,
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate businessDate) {
+		String normalizedRegion = region.trim().toUpperCase();
+		List<AlertHistoryResult> alerts = alertHistoryRepository.findByRunCriteria(appId, normalizedRegion,
+				businessDate);
+		List<RunRequestStatus> runRequests = runRequestRepository.findByRunCriteria(appId, normalizedRegion,
+				businessDate);
+		RunRequestStatus latestRunRequest = runRequests.isEmpty() ? null : runRequests.get(0);
 
-        return ResponseEntity.ok(new AlertHistorySearchResponse(
-                appId,
-                normalizedRegion,
-                businessDate,
-                alerts.size(),
-                alerts,
-                latestRunRequest,
-                runRequests
-        ));
-    }
+		return ResponseEntity.ok(new AlertHistorySearchResponse(appId, normalizedRegion, businessDate, alerts.size(),
+				alerts, latestRunRequest, runRequests));
+	}
 
-    public record AlertHistorySearchResponse(
-            int appId,
-            String region,
-            LocalDate businessDate,
-            int alertCount,
-            List<AlertHistoryResult> alerts,
-            RunRequestStatus runRequest,
-            List<RunRequestStatus> runRequests
-    ) {
-    }
+	public record AlertHistorySearchResponse(int appId, String region, LocalDate businessDate, int alertCount,
+			List<AlertHistoryResult> alerts, RunRequestStatus runRequest, List<RunRequestStatus> runRequests) {
+	}
 }

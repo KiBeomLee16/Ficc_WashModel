@@ -8,14 +8,14 @@ import static org.mockito.Mockito.mockStatic;
 
 class FiccWashModelApplicationTest {
 
-    @Test
-    void mainStartsSpringApplication() {
-        String[] args = {"1", "NAMR", "2026-06-08"};
+	@Test
+	void mainStartsSpringApplication() {
+		String[] args = { "1", "NAMR", "2026-06-08" };
 
-        try (MockedStatic<SpringApplication> springApplication = mockStatic(SpringApplication.class)) {
-            FiccWashModelApplication.main(args);
+		try (MockedStatic<SpringApplication> springApplication = mockStatic(SpringApplication.class)) {
+			FiccWashModelApplication.main(args);
 
-            springApplication.verify(() -> SpringApplication.run(FiccWashModelApplication.class, args));
-        }
-    }
+			springApplication.verify(() -> SpringApplication.run(FiccWashModelApplication.class, args));
+		}
+	}
 }
