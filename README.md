@@ -18,7 +18,7 @@ FICC means Fixed Income, Currencies, and Commodities. The application can run fr
 - Drill-out trade storage in `ficc_wash_alert_drill_out` for investigation and interview demos.
 - Calibration requests with appids `4` to `6`, custom thresholds, and separate calibration result history.
 - Non-calibration appids `1` to `3` write production history and also mirror results into calibration history for comparison.
-- Calibration result comparison against production history by alert business key: unchanged results stay white, production-only removed results show gray, and new calibration-only alerts show yellow in the frontend.
+- Calibration result comparison against production history by alert business key: unchanged white rows display production alert details, production-only removed rows show gray, and new yellow rows display calibration alert details.
 - Daily rolling application logs under the local `logs` directory.
 - Lightweight React frontend for registering local run requests, searching production alert history, and reviewing calibration requests/results through REST APIs.
 
@@ -105,7 +105,7 @@ flowchart TD
    Implemented by `FiccWashTradeModel`. It uses the input `businessDate`, looks up runtime thresholds through `sp_get_surveillance_model_threshold`, then applies deterministic matching. One-time reports are generated from matched BUY/SELL pairs on the business date. Cumulative reports are generated from grouped BUY/SELL activity with the same instrument and counterparty inside the lookup window.
 
 3. `AbstractSurveillanceModel.generateAlertId(Trade tradeA, Trade tradeB)`
-   Uses an `AtomicInteger` sequence and creates alert IDs like `ficc_wash_alert_1`, `ficc_wash_alert_2`, and so on.
+   Uses an `AtomicInteger` sequence. Production IDs use `ficc_wash_alert_1`, while calibration IDs use the clearly distinguishable `ficc_wash_calibration_alert_1` format.
 
 4. `AbstractSurveillanceModel.generateJson(Alert alert)`
    Converts the alert to a JSON payload with `alertId`, `alertType`, `matchType`, `tradeA`, `tradeB`, `relatedTrades`, aggregate quantities, aggregate amounts, threshold amount, reasons, and `createdAt`.

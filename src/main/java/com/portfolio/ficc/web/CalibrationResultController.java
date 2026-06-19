@@ -82,9 +82,11 @@ public class CalibrationResultController {
 			if (matchingProductionAlerts != null && matchingProductionAlerts.isEmpty()) {
 				productionByKey.remove(calibrationAlert.alertBusinessKeyHash());
 			}
-			String comparisonStatus = matchingProductionAlert == null ? "CALIBRATION_NEW" : "SAME_AS_PRODUCTION";
-			comparisonAlerts
-					.add(fromCalibrationAlert(runRequest, calibrationAlert, matchingProductionAlert, comparisonStatus));
+			if (matchingProductionAlert == null) {
+				comparisonAlerts.add(fromCalibrationOnlyAlert(runRequest, calibrationAlert));
+			} else {
+				comparisonAlerts.add(fromMatchedProductionAlert(runRequest, calibrationAlert, matchingProductionAlert));
+			}
 		}
 
 		for (Deque<AlertHistoryResult> removedProductionAlerts : productionByKey.values()) {
@@ -96,13 +98,10 @@ public class CalibrationResultController {
 		return comparisonAlerts;
 	}
 
-	private CalibrationComparisonAlert fromCalibrationAlert(RunRequestStatus runRequest,
-			CalibrationAlertHistoryResult calibrationAlert, AlertHistoryResult productionAlert,
-			String comparisonStatus) {
-		return new CalibrationComparisonAlert(calibrationAlert.calibrationAlertHistoryId(),
-				productionAlert == null ? null : productionAlert.alertHistoryId(), comparisonStatus,
-				calibrationAlert.alertId(), runRequest.requestId(),
-				productionAlert == null ? null : productionAlert.requestId(), calibrationAlert.appId(),
+	private CalibrationComparisonAlert fromCalibrationOnlyAlert(RunRequestStatus runRequest,
+			CalibrationAlertHistoryResult calibrationAlert) {
+		return new CalibrationComparisonAlert(calibrationAlert.calibrationAlertHistoryId(), null, "CALIBRATION_NEW",
+				calibrationAlert.alertId(), runRequest.requestId(), null, calibrationAlert.appId(),
 				calibrationAlert.modelId(), calibrationAlert.region(), calibrationAlert.alertType(),
 				calibrationAlert.matchType(), calibrationAlert.businessDate(), calibrationAlert.firstTradeDate(),
 				calibrationAlert.lastTradeDate(), calibrationAlert.relatedTradeIds(),
@@ -113,6 +112,22 @@ public class CalibrationResultController {
 				calibrationAlert.quantityTolerancePercent(), calibrationAlert.totalAmountTolerancePercent(),
 				calibrationAlert.cumulativeLookupDays(), calibrationAlert.dispatchStatus(),
 				calibrationAlert.createdAt());
+	}
+
+	private CalibrationComparisonAlert fromMatchedProductionAlert(RunRequestStatus runRequest,
+			CalibrationAlertHistoryResult calibrationAlert, AlertHistoryResult productionAlert) {
+		return new CalibrationComparisonAlert(calibrationAlert.calibrationAlertHistoryId(),
+				productionAlert.alertHistoryId(), "SAME_AS_PRODUCTION", productionAlert.alertId(),
+				runRequest.requestId(), productionAlert.requestId(), productionAlert.appId(), productionAlert.modelId(),
+				productionAlert.region(), productionAlert.alertType(), productionAlert.matchType(),
+				productionAlert.businessDate(), productionAlert.firstTradeDate(), productionAlert.lastTradeDate(),
+				productionAlert.relatedTradeIds(), productionAlert.alertBusinessKeyHash(), productionAlert.tradeDate(),
+				productionAlert.assetClass(), productionAlert.instrumentId(), productionAlert.maturityDate(),
+				productionAlert.currency(), productionAlert.traderId(), productionAlert.counterpartyId(),
+				productionAlert.alertPayload(), calibrationAlert.oneTimeMinTotalAmount(),
+				calibrationAlert.cumulativeMinTotalAmount(), calibrationAlert.quantityTolerancePercent(),
+				calibrationAlert.totalAmountTolerancePercent(), calibrationAlert.cumulativeLookupDays(),
+				productionAlert.dispatchStatus(), productionAlert.createdAt());
 	}
 
 	private CalibrationComparisonAlert fromProductionOnlyAlert(RunRequestStatus runRequest,

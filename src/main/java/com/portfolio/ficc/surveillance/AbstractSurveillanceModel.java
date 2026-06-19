@@ -50,6 +50,12 @@ public abstract class AbstractSurveillanceModel {
 		return alertIdPrefix() + alertIdSequence.getAndIncrement();
 	}
 
+	public String generateAlertId(ModelConfig modelConfig, Trade tradeA, Trade tradeB) {
+		Objects.requireNonNull(modelConfig, "modelConfig is required");
+		String prefix = modelConfig.calibrationRun() ? calibrationAlertIdPrefix() : alertIdPrefix();
+		return prefix + alertIdSequence.getAndIncrement();
+	}
+
 	/**
 	 * 4. Convert an alert into a JSON payload.
 	 */
@@ -189,6 +195,10 @@ public abstract class AbstractSurveillanceModel {
 
 	protected String alertIdPrefix() {
 		return "ficc_wash_alert_";
+	}
+
+	protected String calibrationAlertIdPrefix() {
+		return "ficc_wash_calibration_alert_";
 	}
 
 	private void appendTradeField(StringBuilder json, int spaces, String fieldName, Trade trade, boolean includeComma) {

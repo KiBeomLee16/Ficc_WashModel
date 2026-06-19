@@ -83,8 +83,15 @@ class CalibrationResultControllerTest {
 		assertEquals("SAME_AS_PRODUCTION", response.getBody().alerts().get(0).comparisonStatus());
 		assertEquals("CALIBRATION_NEW", response.getBody().alerts().get(1).comparisonStatus());
 		assertEquals("PRODUCTION_REMOVED", response.getBody().alerts().get(2).comparisonStatus());
-		assertEquals("ficc_wash_alert_cal_1", response.getBody().alerts().get(0).alertId());
+		assertEquals("ficc_wash_alert_prod_1", response.getBody().alerts().get(0).alertId());
+		assertEquals("T-9,T-10", response.getBody().alerts().get(0).relatedTradeIds());
+		assertEquals(1, response.getBody().alerts().get(0).appId());
+		assertEquals("NAMR", response.getBody().alerts().get(0).region());
+		assertEquals("{\"alertId\":\"ficc_wash_alert_prod_1\"}", response.getBody().alerts().get(0).alertPayload());
 		assertEquals(new BigDecimal("5.000000"), response.getBody().alerts().get(0).quantityTolerancePercent());
+		assertEquals("ficc_wash_alert_cal_2", response.getBody().alerts().get(1).alertId());
+		assertEquals("T-5,T-6", response.getBody().alerts().get(1).relatedTradeIds());
+		assertEquals("{\"alertId\":\"ficc_wash_alert_cal_2\"}", response.getBody().alerts().get(1).alertPayload());
 		assertEquals("ficc_wash_alert_prod_2", response.getBody().alerts().get(2).alertId());
 		verify(runRequestRepository).findByRequestId(24L);
 		verify(calibrationResultRepository).findByRequestId(24L);
@@ -103,7 +110,8 @@ class CalibrationResultControllerTest {
 		return new CalibrationAlertHistoryResult(calibrationAlertHistoryId, alertId, 24, 4, 1, "NAMRC",
 				"FICC_WASH_TRADE", matchType, businessDate, businessDate, businessDate, relatedTradeIds,
 				alertBusinessKeyHash, businessDate, "Fixed Income", "UST-10Y", LocalDate.of(2036, 6, 8), "USD",
-				"TRDR-1", "CP-ALPHA", "{}", new BigDecimal("100000000.000000"), new BigDecimal("5000000.000000"),
+				"TRDR-1", "CP-ALPHA", "{\"alertId\":\"" + alertId + "\"}", new BigDecimal("100000000.000000"),
+				new BigDecimal("5000000.000000"),
 				new BigDecimal("5.000000"), new BigDecimal("5.000000"), 4, "DISPATCHED",
 				LocalDateTime.of(2026, 6, 8, 9, 45));
 	}
@@ -113,7 +121,8 @@ class CalibrationResultControllerTest {
 		LocalDate businessDate = LocalDate.of(2026, 6, 8);
 		return new AlertHistoryResult(alertHistoryId, alertId, requestId, 1, 1, "NAMR", "FICC_WASH_TRADE", matchType,
 				businessDate, businessDate, businessDate, relatedTradeIds, alertBusinessKeyHash, businessDate,
-				"Fixed Income", "UST-10Y", LocalDate.of(2036, 6, 8), "USD", "TRDR-1", "CP-ALPHA", "{}", "DISPATCHED",
+				"Fixed Income", "UST-10Y", LocalDate.of(2036, 6, 8), "USD", "TRDR-1", "CP-ALPHA",
+				"{\"alertId\":\"" + alertId + "\"}", "DISPATCHED",
 				LocalDateTime.of(2026, 6, 8, 9, 45));
 	}
 }

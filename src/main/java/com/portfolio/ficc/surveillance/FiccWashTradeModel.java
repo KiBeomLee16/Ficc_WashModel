@@ -149,8 +149,8 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
 		reasons.add("One-time minimum amount: matched amount " + matchedAmount.toPlainString() + ", threshold "
 				+ thresholds.oneTimeMinTotalAmount().toPlainString() + ", above threshold.");
 
-		return new Alert(generateAlertId(tradeA, tradeB), modelConfig.modelCode(), ONE_TIME_MATCH_TYPE, tradeA, tradeB,
-				sortedTrades(List.of(tradeA, tradeB)), buyTrade.quantity(), sellTrade.quantity(),
+		return new Alert(generateAlertId(modelConfig, tradeA, tradeB), modelConfig.modelCode(), ONE_TIME_MATCH_TYPE,
+				tradeA, tradeB, sortedTrades(List.of(tradeA, tradeB)), buyTrade.quantity(), sellTrade.quantity(),
 				buyTrade.totalAmount(), sellTrade.totalAmount(), thresholds.oneTimeMinTotalAmount(), reasons,
 				Instant.now());
 	}
@@ -207,9 +207,10 @@ public class FiccWashTradeModel extends AbstractSurveillanceModel {
 		reasons.add("Aggregate minimum amount: matched amount " + matchedAmount.toPlainString() + ", threshold "
 				+ thresholds.cumulativeMinTotalAmount().toPlainString() + ", above threshold.");
 
-		return new Alert(generateAlertId(buyTrade, sellTrade), modelConfig.modelCode(), CUMULATIVE_MATCH_TYPE, buyTrade,
-				sellTrade, sortedTrades(relatedTrades), totalBuyQuantity, totalSellQuantity, totalBuyAmount,
-				totalSellAmount, thresholds.cumulativeMinTotalAmount(), reasons, Instant.now());
+		return new Alert(generateAlertId(modelConfig, buyTrade, sellTrade), modelConfig.modelCode(),
+				CUMULATIVE_MATCH_TYPE, buyTrade, sellTrade, sortedTrades(relatedTrades), totalBuyQuantity,
+				totalSellQuantity, totalBuyAmount, totalSellAmount, thresholds.cumulativeMinTotalAmount(), reasons,
+				Instant.now());
 	}
 
 	private boolean hasSameInstrument(Trade tradeA, Trade tradeB) {

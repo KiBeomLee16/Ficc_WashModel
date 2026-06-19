@@ -24,6 +24,9 @@ class FiccWashTradeModelTest {
 	private static final ModelConfig MODEL_CONFIG = new ModelConfig(1, 1, "NAMR", "NAMR FICC Surveillance App",
 			"FICC_WASH_TRADE", "FICC Wash Trade Surveillance Model",
 			"com.portfolio.ficc.surveillance.FiccWashTradeModel");
+	private static final ModelConfig CALIBRATION_MODEL_CONFIG = new ModelConfig(4, 1, "NAMRC",
+			"NAMRC FICC Calibration App", "FICC_WASH_TRADE", "FICC Wash Trade Surveillance Model",
+			"com.portfolio.ficc.surveillance.FiccWashTradeModel");
 
 	@Test
 	void testAOneTimeTransactionGeneratesAlertFromCounterpartyQuantityAndTotalAmount() {
@@ -81,6 +84,20 @@ class FiccWashTradeModelTest {
 						"Aggregate total amount tolerance: actual difference 1%, threshold 5%, within threshold.",
 						"Aggregate minimum amount: matched amount 5445000.00000, threshold 5000000, above threshold."),
 				alert.reasons());
+	}
+
+	@Test
+	void calibrationTransactionUsesCalibrationAlertIdPrefix() {
+		TestableFiccWashTradeModel model = new TestableFiccWashTradeModel(
+				Map.of("ONE_TIME_MIN_TOTAL_AMOUNT", new BigDecimal("100000000"), "CUMULATIVE_MIN_TOTAL_AMOUNT",
+						new BigDecimal("1000000000"), "QUANTITY_TOLERANCE_PERCENT", new BigDecimal("5"),
+						"TOTAL_AMOUNT_TOLERANCE_PERCENT", new BigDecimal("5")));
+
+		List<Alert> alerts = model.evaluate(CALIBRATION_MODEL_CONFIG, List.of(oneTimeBuy(), oneTimeSell()),
+				BUSINESS_DATE);
+
+		assertEquals(1, alerts.size());
+		assertEquals("ficc_wash_calibration_alert_1", alerts.get(0).alertId());
 	}
 
 	@Test

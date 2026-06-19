@@ -54,7 +54,7 @@ public class FiccSurveillanceApplication {
 		LOGGER.info("------------------------------------------------------------------------------------------");
 		LOGGER.info("Evaluated surveillance model and generated {} alerts : region={}, businessDate={}.", alerts.size(),
 				modelConfig.region(), businessDate);
-		boolean calibrationRun = isCalibrationRun(modelConfig);
+		boolean calibrationRun = modelConfig.calibrationRun();
 
 		if (!calibrationRun) {
 			model.clearCalibrationResults(requestId);
@@ -95,16 +95,6 @@ public class FiccSurveillanceApplication {
 
 		return new RunSummary(appId, modelConfig.modelId(), modelConfig.modelCode(), modelConfig.region(), businessDate,
 				trades.size(), alerts.size(), dispatchedAlerts, duplicateAlerts);
-	}
-
-	private boolean isCalibrationRun(ModelConfig modelConfig) {
-		String normalizedRegion = modelConfig.region().trim().toUpperCase();
-		return switch (modelConfig.appId()) {
-		case 4 -> "NAMRC".equals(normalizedRegion);
-		case 5 -> "EMEAC".equals(normalizedRegion);
-		case 6 -> "APACC".equals(normalizedRegion);
-		default -> false;
-		};
 	}
 
 	/**

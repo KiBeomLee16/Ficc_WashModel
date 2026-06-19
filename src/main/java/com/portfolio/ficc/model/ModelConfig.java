@@ -24,6 +24,15 @@ public record ModelConfig(
         modelClassName = requireText(modelClassName, "modelClassName");
     }
 
+    public boolean calibrationRun() {
+        return switch (appId) {
+            case 4 -> "NAMRC".equals(region);
+            case 5 -> "EMEAC".equals(region);
+            case 6 -> "APACC".equals(region);
+            default -> false;
+        };
+    }
+
     private static String requireText(String value, String fieldName) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(fieldName + " is required");
