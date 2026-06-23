@@ -1,0 +1,5 @@
+node_modules
+dist
+frontend
+bash.exe.stackdump
+vite-dev.*.log

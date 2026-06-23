@@ -1,0 +1,14 @@
+.git
+target
+logs
+.settings
+.vs
+.classpath
+.factorypath
+.project
+
+frontend/node_modules
+frontend/dist
+frontend/frontend
+frontend/bash.exe.stackdump
+frontend/vite-dev.*.log
