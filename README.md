@@ -79,6 +79,38 @@ docker compose up --build
    APACC -> APAC
    ```
 
+## Runtime Flow
+
+```mermaid
+flowchart TD
+    A["Frontend or SQL"] --> B["Register run request<br/>PENDING"]
+    B --> C["Scheduled worker<br/>polls MySQL queue"]
+    C --> D["Claim request<br/>PENDING / FAILED -> RUNNING"]
+    D --> E["Resolve model config<br/>appid + region"]
+    E --> F["Load whitelisted model<br/>FiccWashTradeModel"]
+    F --> G["Load trades<br/>stored procedure"]
+    G --> H["Evaluate wash-trade rules"]
+
+    H --> I["One-time match"]
+    H --> J["Cumulative match"]
+    I --> K["Generate alert JSON"]
+    J --> K
+
+    K --> L{"Production run?"}
+    L -->|Yes| M["Refresh production history<br/>same app/model/region/date"]
+    M --> N["Save production alert history"]
+    L -->|No| O["Skip production history"]
+
+    N --> P["Save calibration snapshot"]
+    O --> P
+    P --> Q["Save drill-out trades"]
+    Q --> R["Mark request COMPLETED"]
+    R --> S["Frontend displays results"]
+    S --> T["Compare calibration<br/>by business key"]
+
+    D --> U["Mark request FAILED<br/>on exception"]
+```
+
 Calibration result colors:
 
 | Status | Meaning |
