@@ -1,5 +1,7 @@
 # FICC Wash Trade Surveillance
 
+[![CI](https://github.com/KiBeomLee16/Ficc_WashModel/actions/workflows/ci.yml/badge.svg)](https://github.com/KiBeomLee16/Ficc_WashModel/actions/workflows/ci.yml)
+
 Rule-based Spring Boot + MySQL surveillance demo for detecting potential FICC wash trades, with a small React console for local run requests, alert history search, and calibration result comparison.
 
 FICC means Fixed Income, Currencies, and Commodities.
@@ -179,13 +181,18 @@ npm run dev
 
 The backend database configuration can be overridden with environment variables:
 
-```text
-FICC_DATABASE_URL
-FICC_DATABASE_USER
-FICC_DATABASE_PASSWORD
-```
+| Variable | Default |
+| --- | --- |
+| `FICC_DATABASE_URL` | `jdbc:mysql://localhost:3306/ficc_surveillance` |
+| `FICC_DATABASE_USER` | `root` |
+| `FICC_DATABASE_PASSWORD` | `root` |
 
 ## Tests
+
+GitHub Actions runs backend tests and frontend build checks on push and pull request:
+
+- Backend: `./mvnw test`
+- Frontend: `npm ci && npm run build`
 
 Backend:
 

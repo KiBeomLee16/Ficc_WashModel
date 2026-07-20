@@ -1,8 +1,8 @@
 ficc:
   database:
-    url: jdbc:mysql://localhost:3306/ficc_surveillance
-    user: root
-    password: root
+    url: ${FICC_DATABASE_URL:jdbc:mysql://localhost:3306/ficc_surveillance}
+    user: ${FICC_DATABASE_USER:root}
+    password: ${FICC_DATABASE_PASSWORD:root}
 
 surveillance:
   worker:
