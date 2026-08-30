@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.Date;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -51,6 +53,9 @@ class AlertHistoryRepositoryTest {
 
 	@Mock
 	private CallableStatement searchStatement;
+
+	@Mock
+	private PreparedStatement requestSearchStatement;
 
 	@Mock
 	private CallableStatement deleteStatement;
@@ -213,6 +218,49 @@ class AlertHistoryRepositoryTest {
 		verify(searchStatement).setInt(1, 3);
 		verify(searchStatement).setString(2, "APAC");
 		verify(searchStatement).setDate(3, Date.valueOf(businessDate));
+	}
+
+	@Test
+	void findByRequestIdQueriesAlertHistoryByRequestId() throws Exception {
+		LocalDate businessDate = LocalDate.of(2026, 6, 8);
+		ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+		when(connection.prepareStatement(anyString())).thenReturn(requestSearchStatement);
+		when(requestSearchStatement.executeQuery()).thenReturn(searchResultSet);
+		when(searchResultSet.next()).thenReturn(true).thenReturn(false);
+		when(searchResultSet.getLong("alert_history_id")).thenReturn(11L);
+		when(searchResultSet.getLong("request_id")).thenReturn(18L);
+		when(searchResultSet.getString("alert_id")).thenReturn("ficc_wash_alert_11");
+		when(searchResultSet.getInt("appid")).thenReturn(3);
+		when(searchResultSet.getInt("modelid")).thenReturn(1);
+		when(searchResultSet.getString("region")).thenReturn("APAC");
+		when(searchResultSet.getString("alert_type")).thenReturn("FICC_WASH_TRADE");
+		when(searchResultSet.getString("match_type")).thenReturn("ONE_TIME_TRANSACTION");
+		when(searchResultSet.getDate("business_date")).thenReturn(Date.valueOf(businessDate));
+		when(searchResultSet.getDate("first_trade_date")).thenReturn(Date.valueOf(businessDate));
+		when(searchResultSet.getDate("last_trade_date")).thenReturn(Date.valueOf(businessDate));
+		when(searchResultSet.getString("related_trade_ids")).thenReturn("T-UST-001,T-UST-002");
+		when(searchResultSet.getString("alert_business_key_hash")).thenReturn("business-key-hash");
+		when(searchResultSet.getDate("trade_date")).thenReturn(Date.valueOf(businessDate));
+		when(searchResultSet.getString("asset_class")).thenReturn("Fixed Income");
+		when(searchResultSet.getString("instrument_id")).thenReturn("UST-10Y");
+		when(searchResultSet.getDate("maturity_date")).thenReturn(Date.valueOf("2036-06-08"));
+		when(searchResultSet.getString("currency")).thenReturn("USD");
+		when(searchResultSet.getString("trader_id")).thenReturn("TRDR-APAC-1");
+		when(searchResultSet.getString("counterparty_id")).thenReturn("CP-APAC-ALPHA");
+		when(searchResultSet.getString("alert_payload")).thenReturn("{\"reasons\":[\"same counterparty\"]}");
+		when(searchResultSet.getString("dispatch_status")).thenReturn("DISPATCHED");
+		when(searchResultSet.getTimestamp("created_at")).thenReturn(Timestamp.valueOf("2026-06-08 09:45:00"));
+
+		AlertHistoryRepository repository = new ConnectionBackedAlertHistoryRepository(connection);
+
+		List<AlertHistoryResult> results = repository.findByRequestId(18L);
+
+		assertEquals(1, results.size());
+		assertEquals(18L, results.get(0).requestId());
+		assertEquals("ficc_wash_alert_11", results.get(0).alertId());
+		verify(connection).prepareStatement(sqlCaptor.capture());
+		assertTrue(sqlCaptor.getValue().contains("WHERE request_id = ?"));
+		verify(requestSearchStatement).setLong(1, 18L);
 	}
 
 	@Test

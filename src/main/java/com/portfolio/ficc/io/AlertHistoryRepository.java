@@ -15,6 +15,7 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.Date;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
@@ -34,6 +35,35 @@ public class AlertHistoryRepository {
 	private static final String INSERT_ALERT_HISTORY_CALL = "{CALL sp_insert_ficc_wash_alert_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
 	private static final String INSERT_ALERT_DRILL_OUT_CALL = "{CALL sp_insert_ficc_wash_alert_drill_out(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)}";
 	private static final String FIND_ALERT_HISTORY_CALL = "{CALL sp_find_ficc_wash_alert_history(?, ?, ?)}";
+	private static final String FIND_ALERT_HISTORY_BY_REQUEST_SQL = """
+			SELECT
+			    alert_history_id,
+			    alert_id,
+			    request_id,
+			    appid,
+			    modelid,
+			    region,
+			    alert_type,
+			    match_type,
+			    business_date,
+			    first_trade_date,
+			    last_trade_date,
+			    related_trade_ids,
+			    alert_business_key_hash,
+			    trade_date,
+			    asset_class,
+			    instrument_id,
+			    maturity_date,
+			    currency,
+			    trader_id,
+			    counterparty_id,
+			    alert_payload,
+			    dispatch_status,
+			    created_at
+			FROM ficc_wash_alert_history
+			WHERE request_id = ?
+			ORDER BY alert_history_id
+			""";
 	private static final String DELETE_ALERT_HISTORY_CALL = "{CALL sp_delete_ficc_wash_alert_history_for_run(?, ?, ?, ?)}";
 
 	private final DatabaseConfig databaseConfig;
@@ -105,6 +135,27 @@ public class AlertHistoryRepository {
 		} catch (SQLException exception) {
 			throw new IllegalStateException("Failed to search alert history for appid=" + appId + ", region=" + region
 					+ ", businessDate=" + businessDate, exception);
+		}
+	}
+
+	public List<AlertHistoryResult> findByRequestId(long requestId) {
+		if (requestId <= 0) {
+			throw new IllegalArgumentException("requestId must be positive");
+		}
+
+		try (Connection connection = getConnection();
+				PreparedStatement statement = connection.prepareStatement(FIND_ALERT_HISTORY_BY_REQUEST_SQL)) {
+			statement.setLong(1, requestId);
+
+			try (ResultSet resultSet = statement.executeQuery()) {
+				List<AlertHistoryResult> results = new ArrayList<>();
+				while (resultSet.next()) {
+					results.add(toAlertHistoryResult(resultSet));
+				}
+				return results;
+			}
+		} catch (SQLException exception) {
+			throw new IllegalStateException("Failed to search alert history for requestId=" + requestId, exception);
 		}
 	}
 

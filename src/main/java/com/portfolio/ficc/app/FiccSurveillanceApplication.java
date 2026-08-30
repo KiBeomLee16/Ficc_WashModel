@@ -96,7 +96,8 @@ public class FiccSurveillanceApplication {
 				alertReportService.uploadProductionReport(requestId, modelConfig.appId(), modelConfig.region(),
 						businessDate);
 			} catch (RuntimeException exception) {
-				LOGGER.error("Failed to upload production alert report to S3: requestId={}.", requestId, exception);
+				LOGGER.error("Failed to upload production alert report to S3: requestId={}, bucket={}, error={}.",
+						requestId, alertReportService.bucketName(), exception.getMessage(), exception);
 			}
 		}
 

@@ -61,7 +61,7 @@ class AlertReportServiceTest {
 		LocalDate businessDate = LocalDate.of(2026, 6, 5);
 		AlertHistoryResult currentRequestAlert = alertHistory(18L, "ficc_wash_alert_18", "TRDR-\"ALPHA\"");
 		AlertHistoryResult otherRequestAlert = alertHistory(19L, "ficc_wash_alert_19", "TRDR-BETA");
-		when(alertHistoryRepository.findByRunCriteria(1, "NAMR", businessDate))
+		when(alertHistoryRepository.findByRequestId(18L))
 				.thenReturn(List.of(otherRequestAlert, currentRequestAlert));
 		when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
 				.thenReturn(PutObjectResponse.builder().build());
@@ -76,7 +76,7 @@ class AlertReportServiceTest {
 		PutObjectRequest request = requestCaptor.getValue();
 		assertEquals("ficc-alerts", request.bucket());
 		assertEquals("alerts/2026/06/05/request-18.csv", request.key());
-		assertEquals("text/csv; charset=UTF-8", request.contentType());
+		assertEquals("text/csv", request.contentType());
 
 		String csv = new String(bodyCaptor.getValue().contentStreamProvider().newStream().readAllBytes(),
 				StandardCharsets.UTF_8);
@@ -90,7 +90,7 @@ class AlertReportServiceTest {
 	@Test
 	void uploadProductionReportSkipsS3WhenNoAlertsExistForRequest() {
 		LocalDate businessDate = LocalDate.of(2026, 6, 5);
-		when(alertHistoryRepository.findByRunCriteria(1, "NAMR", businessDate))
+		when(alertHistoryRepository.findByRequestId(18L))
 				.thenReturn(List.of(alertHistory(19L, "ficc_wash_alert_19", "TRDR-BETA")));
 		AlertReportService service = new AlertReportService(alertHistoryRepository, true, "ficc-alerts", s3Client);
 

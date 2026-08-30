@@ -24,8 +24,8 @@ public class AlertReportService {
 
     private final AlertHistoryRepository alertHistoryRepository;
     private final S3Client s3Client;
-    private final boolean enabled;
-    private final String bucketName;
+	private final boolean enabled;
+	private final String bucketName;
 
     public AlertReportService(
             AlertHistoryRepository alertHistoryRepository,
@@ -74,12 +74,11 @@ public class AlertReportService {
                     "FICC_S3_BUCKET_NAME is not configured.");
         }
 
-        List<AlertHistoryResult> alerts =
-                alertHistoryRepository
-                        .findByRunCriteria(appId, region, businessDate)
-                        .stream()
-                        .filter(alert -> alert.requestId() == requestId)
-                        .toList();
+		List<AlertHistoryResult> alerts = alertHistoryRepository.findByRequestId(requestId).stream()
+				.filter(alert -> alert.appId() == appId)
+				.filter(alert -> alert.region().equalsIgnoreCase(region))
+				.filter(alert -> alert.businessDate().equals(businessDate))
+				.toList();
 
         if (alerts.isEmpty()) {
             LOGGER.info(
@@ -97,22 +96,27 @@ public class AlertReportService {
                 businessDate.getDayOfMonth(),
                 requestId);
 
-        PutObjectRequest request = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .contentType("text/csv; charset=UTF-8")
-                .build();
+		PutObjectRequest request = PutObjectRequest.builder()
+				.bucket(bucketName)
+				.key(key)
+				.contentType("text/csv")
+				.build();
 
         s3Client.putObject(
                 request,
                 RequestBody.fromBytes(csv.getBytes(StandardCharsets.UTF_8)));
 
-        LOGGER.info(
-                "Uploaded Wash Trade alert report: bucket={}, key={}, alerts={}",
-                bucketName,
-                key,
-                alerts.size());
-    }
+		LOGGER.info(
+				"Uploaded Wash Trade alert report: requestId={}, bucket={}, key={}, alerts={}",
+				requestId,
+				bucketName,
+				key,
+				alerts.size());
+	}
+
+	String bucketName() {
+		return bucketName;
+	}
 
     private String createCsv(List<AlertHistoryResult> alerts) {
 

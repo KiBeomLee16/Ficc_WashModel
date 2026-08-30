@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -247,6 +248,41 @@ class FiccSurveillanceApplicationTest {
 		verify(model).clearAlertHistory(modelConfig, businessDate);
 		verify(model).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
 		verify(model).dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
+		verify(alertReportService).uploadProductionReport(requestId, modelConfig.appId(), modelConfig.region(),
+				businessDate);
+	}
+
+	@Test
+	void runKeepsProductionResultWhenS3UploadFails() {
+		long requestId = 24L;
+		ModelConfig modelConfig = modelConfig("FICC_WASH_TRADE");
+		LocalDate businessDate = LocalDate.of(2026, 6, 8);
+		Trade tradeA = trade("T-RUN-001", Side.BUY);
+		Trade tradeB = trade("T-RUN-002", Side.SELL);
+		List<Trade> trades = List.of(tradeA, tradeB);
+		Alert alert = new Alert("ficc_wash_alert_1", "FICC_WASH_TRADE", "ONE_TIME_TRANSACTION", tradeA, tradeB,
+				List.of(tradeA, tradeB), tradeA.quantity(), tradeB.quantity(), tradeA.totalAmount(),
+				tradeB.totalAmount(), new BigDecimal("100000000"), List.of("unit-test reason"),
+				Instant.parse("2026-06-08T00:00:00Z"));
+		String alertPayload = "{\"alertId\":\"ficc_wash_alert_1\"}";
+
+		when(modelRegistry.getModel(modelConfig.modelClassName())).thenReturn(model);
+		when(model.modelCode()).thenReturn("FICC_WASH_TRADE");
+		when(model.getTrades(modelConfig, "NAMR", businessDate)).thenReturn(trades);
+		when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of(alert));
+		when(model.generateJson(alert)).thenReturn(alertPayload);
+		when(model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload)).thenReturn(true);
+		when(model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload))
+				.thenReturn(true);
+		doThrow(new RuntimeException("s3 unavailable")).when(alertReportService).uploadProductionReport(requestId,
+				modelConfig.appId(), modelConfig.region(), businessDate);
+
+		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry, alertReportService);
+
+		RunSummary summary = application.run(requestId, 1, "NAMR", businessDate);
+
+		assertEquals(1, summary.alertsDispatched());
+		assertEquals(0, summary.duplicateAlerts());
 		verify(alertReportService).uploadProductionReport(requestId, modelConfig.appId(), modelConfig.region(),
 				businessDate);
 	}
