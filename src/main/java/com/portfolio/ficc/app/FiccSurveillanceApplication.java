@@ -27,10 +27,13 @@ public class FiccSurveillanceApplication {
 
 	private final DatabaseConfig databaseConfig;
 	private final SurveillanceModelRegistry modelRegistry;
+	private final AlertReportService alertReportService;
 
-	public FiccSurveillanceApplication(DatabaseConfig databaseConfig, SurveillanceModelRegistry modelRegistry) {
+	public FiccSurveillanceApplication(DatabaseConfig databaseConfig, SurveillanceModelRegistry modelRegistry,
+			AlertReportService alertReportService) {
 		this.databaseConfig = Objects.requireNonNull(databaseConfig, "databaseConfig is required");
 		this.modelRegistry = Objects.requireNonNull(modelRegistry, "modelRegistry is required");
+		this.alertReportService = Objects.requireNonNull(alertReportService, "alertReportService is required");
 	}
 
 	public RunSummary run(long requestId, int appId, String region, LocalDate businessDate) {
@@ -63,12 +66,16 @@ public class FiccSurveillanceApplication {
 
 		int dispatchedAlerts = 0;
 		int duplicateAlerts = 0;
+		int productionAlertsSaved = 0;
 
 		for (Alert alert : alerts) {
 			String alertPayload = model.generateJson(alert);
 			boolean productionSaved = false;
 			if (!calibrationRun) {
 				productionSaved = model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
+				if (productionSaved) {
+					productionAlertsSaved++;
+				}
 			}
 			boolean calibrationSaved = model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert,
 					alertPayload);
@@ -83,6 +90,16 @@ public class FiccSurveillanceApplication {
 //                        alert.alertId(), appId, modelConfig.modelId(), modelConfig.region(), businessDate);
 			}
 		}
+
+		if (!calibrationRun && productionAlertsSaved > 0) {
+			try {
+				alertReportService.uploadProductionReport(requestId, modelConfig.appId(), modelConfig.region(),
+						businessDate);
+			} catch (RuntimeException exception) {
+				LOGGER.error("Failed to upload production alert report to S3: requestId={}.", requestId, exception);
+			}
+		}
+
 		LOGGER.info("------------------------------------------------------------------------------------------");
 		LOGGER.info(
 				"Completed surveillance pipeline: requestId={}, tradesProcessed={}, alertsGenerated={}, alertsDispatched={}, duplicateAlerts={}, appid={}, modelid={}, region={}, businessDate={}.",

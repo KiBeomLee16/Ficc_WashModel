@@ -30,8 +30,10 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -53,6 +55,9 @@ class FiccSurveillanceApplicationTest {
 
 	@Mock
 	private SurveillanceModelRegistry modelRegistry;
+
+	@Mock
+	private AlertReportService alertReportService;
 
 	@Test
 	void runExecutesSelectedModelPipelineInSeparateSteps() {
@@ -77,7 +82,7 @@ class FiccSurveillanceApplicationTest {
 		when(model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload))
 				.thenReturn(true);
 
-		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
+		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry, alertReportService);
 
 		ByteArrayOutputStream output = new ByteArrayOutputStream();
 		PrintStream originalOut = System.out;
@@ -95,7 +100,7 @@ class FiccSurveillanceApplicationTest {
 		assertEquals(2, application.requestedAppId);
 		assertEquals("emea", application.requestedRegion);
 
-		InOrder order = inOrder(modelRegistry, model);
+		InOrder order = inOrder(modelRegistry, model, alertReportService);
 		order.verify(modelRegistry).getModel(modelConfig.modelClassName());
 		order.verify(model).modelCode();
 		order.verify(model).getTrades(modelConfig, "NAMR", businessDate);
@@ -105,6 +110,8 @@ class FiccSurveillanceApplicationTest {
 		order.verify(model).generateJson(alert);
 		order.verify(model).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
 		order.verify(model).dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
+		order.verify(alertReportService).uploadProductionReport(requestId, modelConfig.appId(), modelConfig.region(),
+				businessDate);
 	}
 
 	@Test
@@ -130,7 +137,7 @@ class FiccSurveillanceApplicationTest {
 		when(model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload))
 				.thenReturn(false);
 
-		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
+		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry, alertReportService);
 
 		RunSummary summary = application.run(requestId, 1, "NAMR", businessDate);
 
@@ -138,6 +145,8 @@ class FiccSurveillanceApplicationTest {
 		assertEquals(1, summary.duplicateAlerts());
 		verify(model).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
 		verify(model).dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
+		verify(alertReportService, never()).uploadProductionReport(anyLong(), anyInt(), any(String.class),
+				any(LocalDate.class));
 	}
 
 	@Test
@@ -151,7 +160,7 @@ class FiccSurveillanceApplicationTest {
 		when(model.getTrades(modelConfig, "NAMR", businessDate)).thenReturn(trades);
 		when(model.evaluate(modelConfig, trades, businessDate)).thenReturn(List.of());
 
-		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
+		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry, alertReportService);
 
 		RunSummary summary = application.run(20L, 1, "NAMR", businessDate);
 
@@ -166,6 +175,8 @@ class FiccSurveillanceApplicationTest {
 				any(String.class));
 		verify(model, never()).dispatchCalibrationResult(anyLong(), any(ModelConfig.class), any(LocalDate.class),
 				any(Alert.class), any(String.class));
+		verify(alertReportService, never()).uploadProductionReport(anyLong(), anyInt(), any(String.class),
+				any(LocalDate.class));
 	}
 
 	@Test
@@ -190,7 +201,7 @@ class FiccSurveillanceApplicationTest {
 		when(model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload))
 				.thenReturn(true);
 
-		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
+		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry, alertReportService);
 
 		RunSummary summary = application.run(requestId, 4, "NAMRC", businessDate);
 
@@ -200,6 +211,8 @@ class FiccSurveillanceApplicationTest {
 		verify(model, never()).clearAlertHistory(modelConfig, businessDate);
 		verify(model, never()).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
 		verify(model).dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
+		verify(alertReportService, never()).uploadProductionReport(anyLong(), anyInt(), any(String.class),
+				any(LocalDate.class));
 	}
 
 	@Test
@@ -225,7 +238,7 @@ class FiccSurveillanceApplicationTest {
 		when(model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload))
 				.thenReturn(true);
 
-		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
+		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry, alertReportService);
 
 		RunSummary summary = application.run(requestId, 3, "APAC", businessDate);
 
@@ -234,6 +247,8 @@ class FiccSurveillanceApplicationTest {
 		verify(model).clearAlertHistory(modelConfig, businessDate);
 		verify(model).dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
 		verify(model).dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
+		verify(alertReportService).uploadProductionReport(requestId, modelConfig.appId(), modelConfig.region(),
+				businessDate);
 	}
 
 	@Test
@@ -242,7 +257,7 @@ class FiccSurveillanceApplicationTest {
 		when(modelRegistry.getModel(modelConfig.modelClassName())).thenReturn(model);
 		when(model.modelCode()).thenReturn("FICC_WASH_TRADE");
 
-		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry);
+		PipelineApplication application = new PipelineApplication(modelConfig, modelRegistry, alertReportService);
 
 		IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
 				() -> application.run(21L, 1, "NAMR", LocalDate.of(2026, 6, 8)));
@@ -317,8 +332,10 @@ class FiccSurveillanceApplicationTest {
 		private int requestedAppId;
 		private String requestedRegion;
 
-		PipelineApplication(ModelConfig modelConfig, SurveillanceModelRegistry modelRegistry) {
-			super(new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""), modelRegistry);
+		PipelineApplication(ModelConfig modelConfig, SurveillanceModelRegistry modelRegistry,
+				AlertReportService alertReportService) {
+			super(new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""), modelRegistry,
+					alertReportService);
 			this.modelConfig = modelConfig;
 		}
 
@@ -336,7 +353,7 @@ class FiccSurveillanceApplicationTest {
 
 		ConnectionBackedApplication(Connection connection) {
 			super(new DatabaseConfig("jdbc:mysql://unit-test-host:3306/unit", "unit", ""),
-					new SurveillanceModelRegistry(List.of()));
+					new SurveillanceModelRegistry(List.of()), mock(AlertReportService.class));
 			this.connection = connection;
 		}
 

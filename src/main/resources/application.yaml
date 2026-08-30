@@ -1,8 +1,9 @@
 ficc:
-  database:
-    url: jdbc:mysql://localhost:3306/ficc_surveillance
-    user: root
-    password: root
+  aws:
+    region: ${AWS_REGION:ap-northeast-2}
+    s3:
+      enabled: ${FICC_S3_REPORT_ENABLED:false}
+      bucket-name: ${FICC_S3_BUCKET_NAME:}
 
 surveillance:
   worker:

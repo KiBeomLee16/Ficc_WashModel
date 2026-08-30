@@ -25,6 +25,11 @@ services:
       FICC_DATABASE_URL: jdbc:mysql://mysql:3306/ficc_surveillance?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
       FICC_DATABASE_USER: ${MYSQL_USER:-ficc_app}
       FICC_DATABASE_PASSWORD: ${MYSQL_PASSWORD:-ficc_app}
+
+      FICC_S3_REPORT_ENABLED: ${FICC_S3_REPORT_ENABLED:-false}
+      FICC_S3_BUCKET_NAME: ${FICC_S3_BUCKET_NAME:-}
+      AWS_REGION: ${AWS_REGION:-ap-northeast-2}
+
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
