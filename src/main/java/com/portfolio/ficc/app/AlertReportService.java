@@ -10,7 +10,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-
+import org.springframework.beans.factory.annotation.Autowired;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
@@ -27,20 +27,21 @@ public class AlertReportService {
 	private final boolean enabled;
 	private final String bucketName;
 
-    public AlertReportService(
-            AlertHistoryRepository alertHistoryRepository,
-            @Value("${ficc.aws.s3.enabled:false}") boolean enabled,
-            @Value("${ficc.aws.s3.bucket-name:}") String bucketName,
-            @Value("${ficc.aws.region:ap-northeast-2}") String awsRegion) {
+	@Autowired
+	public AlertReportService(
+	        AlertHistoryRepository alertHistoryRepository,
+	        @Value("${ficc.aws.s3.enabled:false}") boolean enabled,
+	        @Value("${ficc.aws.s3.bucket-name:}") String bucketName,
+	        @Value("${ficc.aws.region:ap-northeast-2}") String awsRegion) {
 
-        this(
-                alertHistoryRepository,
-                enabled,
-                bucketName,
-                S3Client.builder()
-                        .region(Region.of(awsRegion))
-                        .build());
-    }
+	    this(
+	            alertHistoryRepository,
+	            enabled,
+	            bucketName,
+	            S3Client.builder()
+	                    .region(Region.of(awsRegion))
+	                    .build());
+	}
 
     AlertReportService(
             AlertHistoryRepository alertHistoryRepository,
