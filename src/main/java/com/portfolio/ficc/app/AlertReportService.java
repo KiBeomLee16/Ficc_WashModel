@@ -75,6 +75,7 @@ public class AlertReportService {
         }
 
 		List<AlertHistoryResult> alerts = alertHistoryRepository.findByRequestId(requestId).stream()
+				.filter(alert -> alert.requestId() == requestId)
 				.filter(alert -> alert.appId() == appId)
 				.filter(alert -> alert.region().equalsIgnoreCase(region))
 				.filter(alert -> alert.businessDate().equals(businessDate))
