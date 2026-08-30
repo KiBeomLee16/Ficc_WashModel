@@ -8,6 +8,8 @@ target/
 logs/
 *.log
 *.log.gz
+*.stackdump
+frontend/frontend/
 
 ### Local environment overrides ###
 .env

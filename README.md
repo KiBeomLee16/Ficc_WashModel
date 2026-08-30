@@ -1,420 +1,177 @@
-# Trade Surveillance Model
+# FICC Wash Trade Surveillance
 
-Java 17 Spring Boot portfolio project for a rule-based FICC wash trade surveillance model, with a small React request console for local demos.
+[![CI](https://github.com/KiBeomLee16/Ficc_WashModel/actions/workflows/ci.yml/badge.svg)](https://github.com/KiBeomLee16/Ficc_WashModel/actions/workflows/ci.yml)
 
-FICC means Fixed Income, Currencies, and Commodities. The application can run from a database-backed request queue. Each request contains an `appid`, `region`, and `businessDate`; the worker claims a pending request, marks it running, resolves the matching surveillance model class from MySQL master/config tables, loads trades through the concrete model, looks up runtime thresholds and lookup windows from a threshold table, evaluates opposite-side matched trades, creates explainable surveillance reports, converts reports to JSON, stores alert history, stores calibration result snapshots, dispatches new alerts to the console, and marks the request completed or failed.
+Rule-based Spring Boot + MySQL surveillance demo for detecting potential FICC wash trades, with a small React console for local run requests, alert history search, and calibration result comparison.
 
-## Key Features
+FICC means Fixed Income, Currencies, and Commodities.
 
-- Spring Boot scheduled queue worker that scans MySQL and processes `PENDING` and `FAILED` surveillance run requests.
-- Database-driven model lookup using `appid`, `region`, and `model_class_name`.
-- Stored procedure based trade ingestion through `sp_get_ficc_trades`.
-- Rule-based FICC wash trade detection with no machine learning dependency.
-- Two detection modes: one-time same-day matching and cumulative lookup-window matching.
-- Runtime threshold lookup from `surveillance_model_threshold`, including `lookup_days` for cumulative surveillance.
-- Explainable alert JSON containing matched trades, aggregate amounts, threshold values, and detection reasons.
-- Duplicate alert prevention through alert fingerprints in alert history tables.
-- Alert business-key storage using trade date, instrument, maturity, currency, trader, and counterparty fields.
-- Drill-out trade storage in `ficc_wash_alert_drill_out` for investigation and interview demos.
-- Calibration requests with appids `4` to `6`, custom thresholds, and separate calibration result history.
-- Non-calibration appids `1` to `3` write production history and also mirror results into calibration history for comparison.
-- Calibration result comparison against production history by alert business key: unchanged white rows display production alert details, production-only removed rows show gray, and new yellow rows display calibration alert details.
-- Daily rolling application logs under the local `logs` directory.
-- Lightweight React frontend for registering local run requests, searching production alert history, and reviewing calibration requests/results through REST APIs.
+## Quick Start
 
-## Design Shape
-
-The Spring Boot entry point is intentionally thin and only boots the application plus scheduling:
-
-```text
-com.portfolio.ficc.FiccWashModelApplication
+```powershell
+docker compose up --build
 ```
 
-Scheduled polling is handled by:
+Open:
 
 ```text
-com.portfolio.ficc.app.FiccRunRequestScheduler
+Frontend: http://localhost:5173
+Backend:  http://localhost:8080
+MySQL:    localhost:3306
 ```
 
-The scheduler delegates claimed queue work to:
+The Docker Compose stack starts:
 
-```text
-com.portfolio.ficc.app.FiccRunRequestWorker
+- MySQL 8.4 with local schema, stored procedures, thresholds, trades, and sample run requests.
+- Spring Boot backend on port `8080`.
+- React/Vite frontend served by Nginx on port `5173`.
+
+If you need to reset the database seed data, remove the Compose volume and start again:
+
+```powershell
+docker compose down -v
+docker compose up --build
 ```
 
-The worker claims DB requests and then calls the surveillance pipeline service:
+## Core Design Choices
 
-```text
-com.portfolio.ficc.app.FiccSurveillanceApplication
-```
+1. **Database-driven model registry**
 
-Model behavior is implemented through an abstract base class:
+   The backend resolves the surveillance model from MySQL config tables using `appid`, `region`, and `model_class_name`, then restricts execution to registered Java model classes.
 
-```text
-com.portfolio.ficc.surveillance.AbstractSurveillanceModel
-com.portfolio.ficc.surveillance.FiccWashTradeModel
-```
+2. **Request queue based processing**
 
-The database stores `model_class_name`, and Java resolves it through `SurveillanceModelRegistry`. Model class metadata lives in `surveillance_model_master`, while `surveillance_model_config` provides the model ID mapping used by thresholds and alert history. This keeps model selection database-driven while still restricting execution to registered, whitelisted model classes.
+   Run requests are stored in MySQL as `PENDING`, claimed by a scheduled Spring worker, processed, then marked `COMPLETED` or `FAILED`.
 
-Runtime flow:
+3. **Calibration vs production comparison**
+
+   Calibration runs store separate alert snapshots and compare them against production history by alert business key instead of generated alert ID.
+
+## Demo Flow
+
+1. Start the stack:
+
+   ```powershell
+   docker compose up --build
+   ```
+
+2. Open the frontend:
+
+   ```text
+   http://localhost:5173
+   ```
+
+3. Submit or search a production run request.
+
+   Useful seeded example:
+
+   ```text
+   appid:        1
+   region:       NAMR
+   businessDate: 2026-06-05
+   ```
+
+4. The worker claims the request from MySQL, loads trades through stored procedures, evaluates wash-trade rules, stores alert history, and displays results in the frontend.
+
+5. Submit a calibration request with changed thresholds to compare:
+
+   ```text
+   NAMRC -> NAMR
+   EMEAC -> EMEA
+   APACC -> APAC
+   ```
+
+## Runtime Flow
 
 ```mermaid
 flowchart TD
-    A["Frontend or SQL"] --> B["Register Run Request<br/>status = PENDING"]
-    B --> C["Scheduled Worker<br/>scan DB queue"]
-    C --> D["Claim Request<br/>PENDING / FAILED -> RUNNING"]
-    D --> E["Load Model Config<br/>appid + region"]
-    E --> F["Select Model<br/>(FiccWashTradeModel)"]
-    F --> G["getTrades()"]
-    G --> H["evaluate()"]
+    A["Frontend or SQL"] --> B["Register run request<br/>PENDING"]
+    B --> C["Scheduled worker<br/>polls MySQL queue"]
+    C --> D["Claim request<br/>PENDING / FAILED -> RUNNING"]
+    D --> E["Resolve model config<br/>appid + region"]
+    E --> F["Load whitelisted model<br/>FiccWashTradeModel"]
+    F --> G["Load trades<br/>stored procedure"]
+    G --> H["Evaluate wash-trade rules"]
 
-    H --> I["One-time Test"]
-    H --> J["Cumulative Test"]
-
-    I --> K["Create Alert<br/>generateAlertId()"]
+    H --> I["One-time match"]
+    H --> J["Cumulative match"]
+    I --> K["Generate alert JSON"]
     J --> K
 
-    K --> L["generateJson(alert)"]
-    L --> M["Production Run?<br/>appid 1-3"]
-    M -->|Yes| N["Refresh Production History<br/>same app/model/region/date"]
-    N --> O["dispatchAlert(payload)<br/>production saveIfNew()"]
-    M -->|No| P["Skip Production History"]
+    K --> L{"Production run?"}
+    L -->|Yes| M["Refresh production history<br/>same app/model/region/date"]
+    M --> N["Save production alert history"]
+    L -->|No| O["Skip production history"]
 
-    O --> Q["dispatchCalibrationResult(payload)<br/>save threshold snapshot"]
-    P --> Q
-    Q --> R["Save Calibration Result"]
-    R --> S["Save Drill-out Trades"]
-    S --> T["Mark Request COMPLETED"]
+    N --> P["Save calibration snapshot"]
+    O --> P
+    P --> Q["Save drill-out trades"]
+    Q --> R["Mark request COMPLETED"]
+    R --> S["Frontend displays results"]
+    S --> T["Compare calibration<br/>by business key"]
 
-    T --> V["Frontend loads results"]
-    V --> W["Compare Calibration<br/>by business key"]
-
-    D --> U["Mark Request FAILED<br/>on exception"]
+    D --> U["Mark request FAILED<br/>on exception"]
 ```
 
-## Five-Method Pipeline
+Calibration result colors:
 
-0. `getSpecificModel(int appId, String region)`
-   Calls `sp_get_surveillance_model_config(appid, region)` and receives the active model configuration. The result includes `model_class_name`.
-
-1. `AbstractSurveillanceModel.getTrades(ModelConfig modelConfig, String region, LocalDate businessDate)`
-   Implemented by `FiccWashTradeModel`. It sends `appid`, `modelid`, `region`, and `businessDate` to the trade stored procedure. The procedure joins `surveillance_model_threshold`, reads `CUMULATIVE_MIN_TOTAL_AMOUNT.lookup_days`, and returns trades from `businessDate - lookup_days` through `businessDate`.
-
-2. `AbstractSurveillanceModel.evaluate(ModelConfig modelConfig, List<Trade> trades, LocalDate businessDate)`
-   Implemented by `FiccWashTradeModel`. It uses the input `businessDate`, looks up runtime thresholds through `sp_get_surveillance_model_threshold`, then applies deterministic matching. One-time reports are generated from matched BUY/SELL pairs on the business date. Cumulative reports are generated from grouped BUY/SELL activity with the same instrument and counterparty inside the lookup window.
-
-3. `AbstractSurveillanceModel.generateAlertId(Trade tradeA, Trade tradeB)`
-   Uses an `AtomicInteger` sequence. Production IDs use `ficc_wash_alert_1`, while calibration IDs use the clearly distinguishable `ficc_wash_calibration_alert_1` format.
-
-4. `AbstractSurveillanceModel.generateJson(Alert alert)`
-   Converts the alert to a JSON payload with `alertId`, `alertType`, `matchType`, `tradeA`, `tradeB`, `relatedTrades`, aggregate quantities, aggregate amounts, threshold amount, reasons, and `createdAt`.
-
-5. `AbstractSurveillanceModel.dispatchAlert(long requestId, ModelConfig modelConfig, LocalDate businessDate, Alert alert, String alertPayload)`
-   Dispatches the already-generated JSON payload into the production alert history tables. Production appids `1` to `3` also call `dispatchCalibrationResult(...)` so the same output is mirrored into calibration history with the threshold snapshot used by that run. Calibration appids `4` to `6` only write calibration result history.
-
-The main method intentionally runs JSON generation and dispatch step by step through the selected model:
-
-```java
-for (Alert alert : alerts) {
-    String alertPayload = model.generateJson(alert);
-    boolean productionSaved = !calibrationRun
-            && model.dispatchAlert(requestId, modelConfig, businessDate, alert, alertPayload);
-    boolean calibrationSaved = model.dispatchCalibrationResult(requestId, modelConfig, businessDate, alert, alertPayload);
-    if (productionSaved || calibrationSaved) {
-        dispatchedAlerts++;
-    }
-}
-```
-
-## MySQL Model Tables
-
-The application first resolves `appid` and `region` through this stored procedure:
-
-```sql
-CALL sp_get_surveillance_model_config(1, 'NAMR');
-```
-
-The procedure reads from the master/config tables:
-
-```text
-surveillance_model_master
-surveillance_model_config
-surveillance_run_request
-surveillance_model_threshold
-ficc_wash_alert_history
-ficc_wash_alert_drill_out
-ficc_wash_calibration_alert_history
-ficc_wash_calibration_alert_drill_out
-```
-
-Table responsibilities:
-
-| Table | Purpose |
+| Status | Meaning |
 | --- | --- |
-| `surveillance_model_master` | App and model metadata. Primary key is `appid`; key columns are `appid`, `region`, `name`, `model_code`, `model_name`, and `model_class_name`. |
-| `surveillance_model_config` | Execution model ID mapping. Key columns are `appid`, `modelid`, and `region`. |
-| `surveillance_run_request` | Queue-style run request table. Stored procedures claim `PENDING` and `FAILED` rows, mark them `RUNNING`, then write `COMPLETED` with generated alert count or `FAILED` with `error_message`. |
-| `surveillance_model_threshold` | Runtime thresholds. `evaluate()` calls `sp_get_surveillance_model_threshold` to retrieve amount/tolerance thresholds. The `lookup_days` column controls how far back `sp_get_ficc_trades` queries for cumulative surveillance. |
-| `ficc_wash_alert_history` | Production alert dispatch history for appids `1` to `3`. Before a production run is reprocessed, rows for the same app/model/region/business date are refreshed. The table stores `alert_business_key_hash` and the business key fields used for calibration comparison. |
-| `ficc_wash_alert_drill_out` | Production drill-out trade snapshot table. It stores each related trade for a generated alert, including trade date/time, instrument, side, quantity, amount, counterparty, account, trader, desk, book, broker, and BUY/SELL leg role. |
-| `ficc_wash_calibration_alert_history` | Calibration result history. It stores alert JSON, the threshold snapshot used for that request, and the same business key fields as production history. Calibration appids `4` to `6` write here only; production appids also mirror rows here for comparison. |
-| `ficc_wash_calibration_alert_drill_out` | Calibration drill-out trade snapshot table. It keeps the related trades for each calibration result row. |
+| `SAME_AS_PRODUCTION` | Calibration alert has the same business key as a production alert. |
+| `PRODUCTION_REMOVED` | Production alert exists, but calibration did not reproduce it. |
+| `CALIBRATION_NEW` | Calibration generated a new business key not present in production. |
 
-ERD overview:
+## Tech Stack
 
-```mermaid
-erDiagram
-    surveillance_model_master ||--o{ surveillance_model_config : configures
-    surveillance_model_master ||--o{ surveillance_run_request : receives
-    surveillance_model_config ||--o{ surveillance_model_threshold : defines
-    surveillance_model_config ||--o{ ficc_wash_alert_history : produces
-    surveillance_model_config ||--o{ ficc_wash_calibration_alert_history : produces
+- Java 17
+- Spring Boot 3
+- MySQL stored procedures
+- React + Vite
+- Docker Compose
+- JUnit 5 + Mockito
 
-    surveillance_run_request ||--o{ ficc_wash_alert_history : records
-    surveillance_run_request ||--o{ ficc_wash_calibration_alert_history : records
+## Main API Endpoints
 
-    ficc_wash_alert_history ||--o{ ficc_wash_alert_drill_out : explains
-    ficc_wash_calibration_alert_history ||--o{ ficc_wash_calibration_alert_drill_out : explains
-
-    surveillance_model_master {
-        int appid PK
-        string region
-        string model_code
-        string model_class_name
-    }
-
-    surveillance_model_config {
-        int appid PK_FK
-        int modelid PK
-        string region PK
-    }
-
-    surveillance_run_request {
-        bigint request_id PK
-        int appid FK
-        string region
-        date business_date
-        string status
-        int alerts_generated
-    }
-
-    surveillance_model_threshold {
-        int appid PK_FK
-        int modelid PK_FK
-        string region PK_FK
-        string threshold_name PK
-        decimal threshold_value
-        int lookup_days
-    }
-
-    ficc_wash_alert_history {
-        bigint alert_history_id PK
-        bigint request_id FK
-        int appid FK
-        int modelid FK
-        string region FK
-        string match_type
-        string alert_business_key_hash
-        date business_date
-    }
-
-    ficc_wash_alert_drill_out {
-        bigint alert_history_id PK_FK
-        string trade_id PK
-        int trade_sequence
-        string side
-        decimal quantity
-        decimal total_amount
-    }
-
-    ficc_wash_calibration_alert_history {
-        bigint calibration_alert_history_id PK
-        bigint request_id FK
-        int appid FK
-        int modelid FK
-        string region FK
-        string match_type
-        string alert_business_key_hash
-        decimal one_time_min_total_amount
-        decimal cumulative_min_total_amount
-    }
-
-    ficc_wash_calibration_alert_drill_out {
-        bigint calibration_alert_history_id PK_FK
-        string trade_id PK
-        int trade_sequence
-        string side
-        decimal quantity
-        decimal total_amount
-    }
-```
-
-The seed data creates three production app rows and three calibration app rows:
-
-| appid | region | name |
-| ---: | --- | --- |
-| 1 | NAMR | NAMR FICC Surveillance App |
-| 2 | EMEA | EMEA FICC Surveillance App |
-| 3 | APAC | APAC FICC Surveillance App |
-| 4 | NAMRC | NAMRC FICC_WASH Model |
-| 5 | EMEAC | EMEAC FICC_WASH Model |
-| 6 | APACC | APACC FICC_WASH Model |
-
-## Model Class Lookup
-
-The config table stores the concrete model class:
-
-```text
-com.portfolio.ficc.surveillance.FiccWashTradeModel
-```
-
-`SurveillanceModelRegistry` must also register that class. If the DB contains an unregistered class name, the program fails fast instead of executing arbitrary code.
-
-## MySQL Stored Procedure Input
-
-Stored procedure names are hard-coded as Java class fields. For `FiccWashTradeModel`, the model calls:
-
-```sql
-CALL sp_get_ficc_trades(1, 1, 'NAMR', '2026-06-05');
-```
-
-Expected result columns:
-
-```text
-trade_id, trade_timestamp, asset_class, instrument_id, maturity, currency,
-side, quantity, price, counterparty_id, account_id, beneficial_owner, trader_id, desk, book, broker
-```
-
-A runnable schema, stored procedure, and sample data are included in:
-
-```text
-sql/mysql_schema_and_sample_data.sql
-```
-
-The included sample data covers NAMR, EMEA, and APAC trades from `2026-06-01` through `2026-06-05`. With `CUMULATIVE_MIN_TOTAL_AMOUNT.lookup_days = 4`, the trade stored procedure can load a five-day cumulative window. Each business date is seeded to produce production-positive examples, negative examples, and selected calibration-only candidates that can appear when thresholds are lowered or tolerances are widened.
-
-| Business date | Expected positive examples |
-| --- | --- |
-| `2026-06-01` | one same-day one-time match and one same-day cumulative match |
-| `2026-06-02` | one one-time match and one cumulative match using `2026-06-01` plus `2026-06-02` trades |
-| `2026-06-03` | one one-time match and one cumulative match using `2026-06-02` plus `2026-06-03` trades |
-| `2026-06-04` | one one-time match and one cumulative match using `2026-06-03` plus `2026-06-04` trades |
-| `2026-06-05` | one one-time match for `T-NAMR-UST-001`/`T-NAMR-UST-002` and one cumulative FX match across the lookup window |
-
-The same seed also includes negative examples with low notional, mismatched quantity, or different counterparties so not every trade pair generates an alert.
-
-For production runs, old production history for the same app/model/region/business date is deleted before the fresh run results are inserted. Calibration results are retained by request ID so different threshold experiments can be compared side by side. When a new alert is saved, the related drill-out trade table keeps the exact trades that made up the report.
-
-## Alert Business Key
-
-Production and calibration history both store a stable comparison key:
-
-```text
-match_type
-trade_date
-asset_class
-instrument_id
-maturity_date
-currency
-trader_id
-counterparty_id
-```
-
-Java stores those fields directly and also stores `alert_business_key_hash`, a SHA-256 hash of the normalized values. Calibration result rows compare against the corresponding production region: `NAMRC -> NAMR`, `EMEAC -> EMEA`, and `APACC -> APAC`.
-
-The comparison intentionally uses the business key rather than only `alert_id` or `related_trade_ids`. That makes calibration review more realistic: a different threshold run can produce different generated IDs or slightly different drill-out rows, while still representing the same surveillance scenario.
-
-Frontend comparison colors:
-
-| Status | Meaning | Frontend color |
+| Endpoint | Method | Purpose |
 | --- | --- | --- |
-| `SAME_AS_PRODUCTION` | Calibration alert has the same business key as a production alert | White |
-| `PRODUCTION_REMOVED` | Production alert exists, but calibration did not reproduce it | Gray |
-| `CALIBRATION_NEW` | Calibration generated a business key not present in production | Yellow |
+| `/run-request` | `POST` | Register a production run request. |
+| `/alert-history` | `GET` | Search production alert history by `appid`, `region`, and `businessDate`. |
+| `/calibration-run-request` | `POST` | Register a calibration request and update calibration thresholds. |
+| `/calibration-run-requests` | `GET` | Load calibration request rows. |
+| `/calibration-results?requestId=...` | `GET` | Load calibration results and compare them to production by business key. |
 
-## Spring Configuration
-
-Runtime configuration lives in:
-
-```text
-src/main/resources/application.yaml
-```
-
-Example:
-
-```yaml
-ficc:
-  database:
-    url: jdbc:mysql://localhost:3306/ficc_surveillance
-    user: root
-    password: root
-
-surveillance:
-  worker:
-    enabled: true
-    initial-delay-ms: 3000
-    fixed-delay-ms: 5000
-
-logging:
-  file:
-    name: logs/ficc-wash-surveillance.log
-  logback:
-    rollingpolicy:
-      file-name-pattern: logs/ficc-wash-surveillance.%d{yyyy-MM-dd}.%i.log.gz
-      max-file-size: 10MB
-      max-history: 30
-      total-size-cap: 1GB
-  level:
-    com.portfolio.ficc: INFO
-```
-
-Stored procedure names are hard-coded as Java class fields in the application/model classes.
-
-## Application Logging
-
-The active application log is written to:
+## Project Structure
 
 ```text
-logs/ficc-wash-surveillance.log
+src/main/java/com/portfolio/ficc
+  app/            request worker and orchestration
+  surveillance/   wash-trade detection model and registry
+  io/             MySQL repositories and dispatching
+  web/            REST controllers
+  model/          domain records
+
+frontend/         React request console
+sql/              schema, stored procedures, sample data
+Dockerfile        backend image
+frontend/Dockerfile
+docker-compose.yml
 ```
 
-Spring Boot Logback rolling policy keeps daily rolling files with a size index:
+## Local Development Without Docker
 
-```text
-logs/ficc-wash-surveillance.2026-06-09.0.log.gz
-logs/ficc-wash-surveillance.2026-06-09.1.log.gz
-logs/ficc-wash-surveillance.2026-06-10.0.log.gz
-```
-
-The current configuration keeps up to 30 days of logs, rolls again when the active file reaches 10 MB, and caps retained log storage at 1 GB.
-
-## How To Run
-
-Load the sample MySQL schema and stored procedure:
+Load the MySQL demo schema manually:
 
 ```powershell
 mysql -u root -p < sql\mysql_schema_and_sample_data.sql
 ```
 
-The SQL file is a full local demo reset script. It drops and recreates the demo schema objects, stored procedures, seed trades, thresholds, and sample run requests. If your local database was created before the alert business-key columns were added, rerun this script before testing the latest Java code.
-
-Build and run:
-
-```powershell
-.\mvnw.cmd clean package
-java -jar target\ficc-wash-trade-surveillance-1.0.0.jar
-```
-
-After startup, the scheduled worker scans `surveillance_run_request` every five seconds by default, claims `PENDING` and `FAILED` rows, and processes them. The seed SQL inserts pending production requests for NAMR, EMEA, and APAC covering `2026-06-01` through `2026-06-05`.
-
-Run as Spring Boot queue worker:
+Run the backend:
 
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
 
-Run the React request console in a second terminal:
+Run the frontend in another terminal:
 
 ```powershell
 cd frontend
@@ -422,236 +179,79 @@ npm install
 npm run dev
 ```
 
-Open:
+The backend database configuration can be overridden with environment variables:
 
-```text
-http://localhost:5173
-```
+| Variable | Default |
+| --- | --- |
+| `FICC_DATABASE_URL` | `jdbc:mysql://localhost:3306/ficc_surveillance` |
+| `FICC_DATABASE_USER` | `root` |
+| `FICC_DATABASE_PASSWORD` | `root` |
 
-The React development server proxies `/run-request` to Spring Boot on `http://localhost:8080`. The browser submits `appid`, `region`, `businessDate`, and `requestedBy`; Java inserts a `PENDING` row into `surveillance_run_request` and immediately returns the new request ID. The scheduled worker later claims and runs the request from the database queue.
+## Tests
 
-The same frontend uses `GET /alert-history` for the production Result Window. Search results are read from `ficc_wash_alert_history` by `appid`, `region`, and `businessDate`; they are not hard-coded in React. Calibration requests use `POST /calibration-run-request`, `GET /calibration-run-requests`, and `GET /calibration-results?requestId=...`.
+GitHub Actions runs backend tests and frontend build checks on push and pull request:
 
-Local API summary:
+- Backend: `./mvnw test`
+- Frontend: `npm ci && npm run build`
 
-| Endpoint | Method | Purpose |
-| --- | --- | --- |
-| `/run-request` | `POST` | Register a production run request in MySQL |
-| `/alert-history` | `GET` | Search production alert history for `appid`, `region`, and `businessDate` |
-| `/calibration-run-request` | `POST` | Register a calibration request and update calibration thresholds |
-| `/calibration-run-requests` | `GET` | Load calibration run request rows |
-| `/calibration-results?requestId=...` | `GET` | Load calibration results and compare them to production by business key |
-
-## Local MySQL Demo Steps
-
-Use these steps when running the project locally with MySQL Workbench.
-
-1. Create or reset the local demo schema by running:
-
-```sql
-SOURCE C:/Users/GRAVITY/eclipse-workspace/FICC_Wash_Model/sql/mysql_schema_and_sample_data.sql;
-```
-
-2. Confirm the seeded run requests:
-
-```sql
-SELECT request_id, appid, region, business_date, status, requested_by
-FROM surveillance_run_request
-ORDER BY request_id;
-```
-
-3. Start the application from the project root:
-
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-
-4. Wait for the scheduled worker to scan the queue, then confirm the request moved to `COMPLETED` or `FAILED`:
-
-```sql
-SELECT request_id, appid, region, business_date, status, alerts_generated, started_at, completed_at, error_message
-FROM surveillance_run_request
-ORDER BY request_id DESC;
-```
-
-5. Review generated alert history:
-
-```sql
-SELECT alert_history_id, request_id, alert_id, match_type, region, business_date,
-       trade_date, instrument_id, maturity_date, currency, trader_id, counterparty_id,
-       alert_business_key_hash, created_at
-FROM ficc_wash_alert_history
-ORDER BY alert_history_id DESC;
-```
-
-6. Drill into the trades behind each alert:
-
-```sql
-SELECT alert_history_id, trade_sequence, trade_id, trade_date, side, quantity, total_amount, counterparty_id, trade_role
-FROM ficc_wash_alert_drill_out
-ORDER BY alert_history_id DESC, trade_sequence;
-```
-
-7. Review calibration result history and the threshold snapshot saved with each result:
-
-```sql
-SELECT calibration_alert_history_id, request_id, alert_id, match_type, region, business_date,
-       trade_date, instrument_id, maturity_date, currency, trader_id, counterparty_id,
-       alert_business_key_hash,
-       one_time_min_total_amount, cumulative_min_total_amount,
-       quantity_tolerance_percent, total_amount_tolerance_percent, cumulative_lookup_days
-FROM ficc_wash_calibration_alert_history
-ORDER BY calibration_alert_history_id DESC;
-```
-
-8. Insert a new manual request for a repeat run:
-
-```sql
-INSERT INTO surveillance_run_request (appid, region, business_date, requested_by)
-VALUES (1, 'NAMR', '2026-06-05', 'local-demo');
-```
-
-9. Wait for the next scheduled worker scan and compare alert counts with history records. Production rows for the same app/model/region/business date are refreshed, while calibration result rows remain request-specific for later comparison.
-
-10. In the React console, use the production request panel to submit or search production runs. Use the calibration panel to submit a calibration request with different thresholds, click a calibration request row, and review the comparison colors:
-
-```text
-white = same business key as production
-gray  = production alert removed by calibration
-yellow = new calibration-only alert
-```
-
-Run unit tests:
+Backend:
 
 ```powershell
 .\mvnw.cmd test
 ```
 
-You can also run the main class from an IDE:
+Frontend build check:
 
-```text
-com.portfolio.ficc.FiccWashModelApplication
+```powershell
+cd frontend
+npm run build
 ```
 
-In Eclipse or Spring Tool Suite, this class should appear under `Run As > Spring Boot App` after Maven dependencies are refreshed.
+## Detection Model Summary
 
-## Deterministic Matching Model
+The model detects two deterministic wash-trade patterns:
 
-Mandatory candidate rules:
-
-| Rule | Requirement |
+| Pattern | Summary |
 | --- | --- |
-| Same Instrument Rule | Same `assetClass`, `instrumentId`, `maturity`, and `currency` |
-| Opposite Side Rule | One `BUY` and one `SELL` |
+| One-time transaction | Matched BUY/SELL trades on the business date with the same instrument and counterparty. |
+| Cumulative transaction | Aggregated BUY/SELL activity within the configured lookup window. |
 
-One-time transaction report:
+Both patterns use database-backed thresholds for:
 
-| Rule | Requirement |
-| --- | --- |
-| Same Counterparty Rule | `counterpartyId` must match |
-| Quantity Tolerance Rule | BUY and SELL quantities must be within `QUANTITY_TOLERANCE_PERCENT` |
-| Total Amount Tolerance Rule | BUY and SELL total amounts must be within `TOTAL_AMOUNT_TOLERANCE_PERCENT` |
-| Minimum Amount Rule | Matched amount must be greater than or equal to `ONE_TIME_MIN_TOTAL_AMOUNT` |
+- quantity tolerance
+- total amount tolerance
+- minimum matched amount
+- cumulative lookup days
 
-Cumulative transaction report:
+## Database Seed
 
-| Rule | Requirement |
-| --- | --- |
-| Grouping Rule | Group by `assetClass`, `instrumentId`, `maturity`, `currency`, and `counterpartyId` |
-| Two-Sided Activity Rule | Group must contain at least one BUY and one SELL |
-| Quantity Tolerance Rule | Aggregate BUY and SELL quantities must be within `QUANTITY_TOLERANCE_PERCENT` |
-| Total Amount Tolerance Rule | Aggregate BUY and SELL total amounts must be within `TOTAL_AMOUNT_TOLERANCE_PERCENT` |
-| Minimum Amount Rule | Aggregate matched amount must be greater than or equal to `CUMULATIVE_MIN_TOTAL_AMOUNT` |
-| Lookup Period Rule | `CUMULATIVE_MIN_TOTAL_AMOUNT.lookup_days` controls the historical trade window used by `getTrades()` |
+The local SQL script includes:
 
-For the MVP, `totalAmount` is calculated as `quantity * price`. In production, this would be replaced by asset-class-specific notional logic.
+- model master/config rows for production and calibration appids
+- runtime thresholds
+- sample FICC trades
+- stored procedures
+- production and calibration history tables
+- drill-out tables for trades behind each alert
 
-## Example Console Output
+Production appids:
 
-The `createdAt` value changes each run.
+| appid | region |
+| ---: | --- |
+| 1 | NAMR |
+| 2 | EMEA |
+| 3 | APAC |
 
-```json
------ FICC WASH TRADE ALERT -----
-{
-  "alertId": "ficc_wash_alert_1",
-  "alertType": "FICC_WASH_TRADE",
-  "matchType": "ONE_TIME_TRANSACTION",
-  "tradeA": {
-    "tradeId": "T-NAMR-UST-001",
-    "counterpartyId": "CP-ALPHA",
-    "quantity": 10000000,
-    "price": 99.8125,
-    "totalAmount": 998125000.0000
-  },
-  "tradeB": {
-    "tradeId": "T-NAMR-UST-002",
-    "counterpartyId": "CP-ALPHA",
-    "quantity": 9980000,
-    "price": 99.8130,
-    "totalAmount": 996133740.0000
-  },
-  "totalBuyQuantity": 10000000,
-  "totalSellQuantity": 9980000,
-  "totalBuyAmount": 998125000.0000,
-  "totalSellAmount": 996133740.0000,
-  "thresholdAmount": 100000000.000000,
-  "reasons": [
-    "One-time quantity tolerance: actual difference 0.200000%, threshold 5.000000%, within threshold.",
-    "One-time total amount tolerance: actual difference 0.199496%, threshold 5.000000%, within threshold.",
-    "One-time minimum amount: matched amount 996133740.0000, threshold 100000000.000000, above threshold."
-  ],
-  "createdAt": "2026-06-05T00:30:00Z"
-}
+Calibration appids:
 
-Processed trades for appid=1, modelid=1, model=FICC_WASH_TRADE, class=com.portfolio.ficc.surveillance.FiccWashTradeModel, region=NAMR, businessDate=2026-06-05 and dispatched 2 alerts, skipped 0 duplicates.
-```
+| appid | region | compares to |
+| ---: | --- | --- |
+| 4 | NAMRC | NAMR |
+| 5 | EMEAC | EMEA |
+| 6 | APACC | APAC |
 
-The real JSON also includes full `tradeA` and `tradeB` objects for each alert.
+## Notes
 
-## Package Structure
-
-```text
-com.portfolio.ficc
-  FiccWashModelApplication.java
-  app
-    FiccRunRequestScheduler.java
-    FiccRunRequestWorker.java
-    FiccSurveillanceApplication.java
-  surveillance
-    AbstractSurveillanceModel.java
-    FiccWashTradeModel.java
-    SurveillanceModelRegistry.java
-  model
-    Alert.java
-    AlertBusinessKey.java
-    AlertHistoryResult.java
-    CalibrationAlertHistoryResult.java
-    ModelConfig.java
-    RunRequest.java
-    RunSummary.java
-    Side.java
-    ThresholdSnapshot.java
-    Trade.java
-  io
-    AlertDispatcher.java
-    AlertHistoryRepository.java
-    CalibrationResultRepository.java
-    CalibrationThresholdRepository.java
-    DatabaseConfig.java
-    RunRequestRepository.java
-    TradeCsvReader.java
-  web
-    AlertHistoryController.java
-    CalibrationResultController.java
-    CalibrationRunRequestController.java
-    RunRequestController.java
-```
-
-## Future Enhancements
-
-- Add reviewer decisions and case workflow on top of the existing MySQL alert history.
-- Add REST APIs for searching run request status and alert-history drill-out trade rows.
-- Dispatch alerts to Kafka for downstream case management.
-- Move rule weights to JSON, YAML, or database-backed configuration.
-- Add account hierarchy and related-party matching.
-- Add audit logging for stored procedure inputs, alert IDs, and dispatch status.
+- `alert_business_key_hash` is used for production/calibration comparison because generated alert IDs can differ between runs.
+- Stored procedures are kept in `sql/mysql_schema_and_sample_data.sql` for local demo simplicity.
+- The current project is intentionally scoped as a backend-architecture mimic/demo rather than a full production surveillance platform.
