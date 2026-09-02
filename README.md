@@ -103,7 +103,8 @@ flowchart TD
     M --> N["Save production alert history"]
     L -->|No| O["Skip production history"]
 
-    N --> P["Save calibration snapshot"]
+    N --> X["Optional S3 CSV export<br/>alerts/yyyy/mm/dd/request-id.csv"]
+    X --> P["Save calibration snapshot"]
     O --> P
     P --> Q["Save drill-out trades"]
     Q --> R["Mark request COMPLETED"]
@@ -128,6 +129,7 @@ Calibration result colors:
 - MySQL stored procedures
 - React + Vite
 - Docker Compose
+- AWS SDK for Java + optional S3 export
 - JUnit 5 + Mockito
 
 ## Main API Endpoints
@@ -140,11 +142,35 @@ Calibration result colors:
 | `/calibration-run-requests` | `GET` | Load calibration request rows. |
 | `/calibration-results?requestId=...` | `GET` | Load calibration results and compare them to production by business key. |
 
+## AWS Integration
+
+The project includes an optional S3 export path for production alert reports.
+
+When a production run saves one or more alerts, the backend can export those alert-history rows as a CSV file to S3:
+
+```text
+alerts/yyyy/mm/dd/request-{requestId}.csv
+```
+
+S3 export is disabled by default. Enable it with environment variables:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `FICC_S3_REPORT_ENABLED` | `false` | Enables CSV upload to S3 after production alert history is saved. |
+| `FICC_S3_BUCKET_NAME` | empty | Target S3 bucket for alert report CSV files. |
+| `AWS_REGION` | `ap-northeast-2` | AWS region used by the S3 client. |
+
+The code does not hard-code AWS access keys. `AlertReportService` builds an AWS SDK `S3Client` with the configured region and relies on the AWS SDK default credentials provider chain, so local credentials, environment variables, EC2 instance profiles, or ECS task roles can be used depending on where the app runs.
+
+If S3 upload fails, the surveillance run is kept successful and the upload error is logged. This keeps alert generation and report export loosely coupled.
+
+Reference: [AWS SDK for Java 2.x default credentials provider chain](https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/credentials-chain.html)
+
 ## Project Structure
 
 ```text
 src/main/java/com/portfolio/ficc
-  app/            request worker and orchestration
+  app/            request worker, orchestration, optional S3 report export
   surveillance/   wash-trade detection model and registry
   io/             MySQL repositories and dispatching
   web/            REST controllers
@@ -179,13 +205,16 @@ npm install
 npm run dev
 ```
 
-The backend database configuration can be overridden with environment variables:
+Runtime configuration can be overridden with environment variables:
 
 | Variable | Default |
 | --- | --- |
 | `FICC_DATABASE_URL` | `jdbc:mysql://localhost:3306/ficc_surveillance` |
 | `FICC_DATABASE_USER` | `root` |
 | `FICC_DATABASE_PASSWORD` | `root` |
+| `FICC_S3_REPORT_ENABLED` | `false` |
+| `FICC_S3_BUCKET_NAME` | empty |
+| `AWS_REGION` | `ap-northeast-2` |
 
 ## Tests
 
@@ -254,4 +283,5 @@ Calibration appids:
 
 - `alert_business_key_hash` is used for production/calibration comparison because generated alert IDs can differ between runs.
 - Stored procedures are kept in `sql/mysql_schema_and_sample_data.sql` for local demo simplicity.
+- Optional S3 export is intended as a lightweight AWS integration point, not a full production reporting pipeline.
 - The current project is intentionally scoped as a backend-architecture mimic/demo rather than a full production surveillance platform.
